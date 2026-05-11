@@ -1,6 +1,8 @@
 # ZeroVuln Backend — API Planning (Supabase)
 
-Smart Contract AI Copilot. BE pakai **Supabase** (Postgres + Auth + Storage + Edge Functions). Tujuan dokumen ini: roadmap implementasi API yang nyalain semua flow di `UI-Mockup-Full.html` (scope: codegen, audit, auto-fix, gas-opt — **tanpa deploy on-chain, tanpa chat, tanpa tabel optimizations, tanpa version history**) + **Hacker Annotation Pipeline** (kontributor manusia nge-annotate smart contract, admin approve, jadi dataset training AI).
+Smart Contract AI Copilot. BE pakai **Supabase** (Postgres + Auth + Storage + Edge Functions). Tujuan dokumen ini: roadmap implementasi API yang nyalain semua flow di `UI-Mockup-Full.html` (scope: codegen, audit, auto-fix, gas-opt — **tanpa deploy on-chain, tanpa chat, tanpa tabel optimizations, tanpa version history**) + **kontributor training** (auditor manusia; admin approve → dataset). Temuan AI vs auditor **dipisah**: tabel **`ai_findings`** dan **`auditor_findings`**.
+
+**Model data disederhanakan (tanpa workspace / tanpa tabel `files`)**: tiap **smart contract** = **satu row** di tabel **`contracts`**. Ada dua jenis: (**1**) kontrak **copilot milik user** (`is_catalog=false`, owner = wallet yang upload/generate) dipakai codegen/audit/gas-opt; (**2**) kontrak **katalog admin** (`is_catalog=true`) dipublish admin sebagai bahan latihan/training — **POV kontributor / “hacker” cuma melihat list katalog ini**, bukan kontrak yang dibuat user lain.
 
 ---
 
@@ -18,7 +20,7 @@ Smart Contract AI Copilot. BE pakai **Supabase** (Postgres + Auth + Storage + Ed
 **Pembagian tugas**:
 - **Supabase** = "control plane" (auth, metadata, query). Tidak menyimpan content besar — cuma URI pointer.
 - **0G Compute** = "AI brain". Edge Function dispatch job ke 0G, simpan `compute_job_id` di Supabase, poll/subscribe sampai selesai.
-- **0G Storage** = "content layer". Setiap output AI (reasoning trace, generated code, audit JSON, gas-opt diff) di-upload ke 0G → Supabase cuma simpan `storage_uri` (`0g://...`) + `content_hash`.
+- **0G Storage** = "content layer". Output AI: reasoning **per `ai_findings`**, remediation, snapshot kode — di-upload ke 0G → Postgres simpan pointer/hash (`0g://...`, kolom di `ai_findings` / `auditor_findings` / `contracts`).
 
 **Kenapa Supabase + 0G**: 0G handle compute & storage on-chain verifiable (sesuai branding "verified on 0G"). Supabase handle yang bukan core selling point: relasional query — yang lambat/mahal kalau dipaksa via on-chain.
 
@@ -59,19 +61,21 @@ Hackathon scope: **0G Galileo Testnet (chain id 16602)** — dipakai untuk Compu
 | Screen | Endpoint utama |
 |---|---|
 | 00 Landing | — |
-| 01 Empty / 02 Dashboard | `GET /workspaces` |
-| 03 Code-gen | `POST /workspaces`, `POST /ai/codegen` |
-| 04 Workspace | `GET /workspaces/:id`, `GET /workspaces/:id/files`, `PATCH /files/:id`, `POST /ai/audit`, `POST /ai/auto-fix` |
-| 05 Gas-opt | `POST /ai/gas-opt` (hasil = audit baru kind=gas-opt + findings dengan diff di `remediation`) |
+| 01 Empty / 02 Dashboard | `GET /contracts` |
+| 03 Code-gen | `POST /contracts` (smart contract baru), `POST /ai/codegen` dengan `contract_id` |
+| 04 Editor | `GET /contracts/:id`, `PATCH /contracts/:id` (update source), `POST /ai/audit`, `POST /ai/auto-fix` |
+| 05 Gas-opt | `POST /ai/gas-opt` dengan `contract_id` (hasil = audit baru + **`ai_findings`** dengan diff di `remediation`) |
 
-| 08 Audit detail | `GET /audits/:id`, `GET /findings/:id` |
+| 08 Audit detail | `GET /audits/:id` (include `ai_findings`), `GET /ai-findings/:id` |
 | 09 Settings | `GET/PATCH /me/settings` |
 | 10 Errors | error handling cross-cutting |
 | Modal wallet | (FE only — connect wallet di client, simpan address di state, kirim sebagai header `X-Wallet-Address` ke semua request) |
-| Hacker Inbox (queue) | `GET /annotations` (server filter `hacker_id` dari header) |
-| Hacker Editor | `POST /annotations`, `PATCH /annotations/:id`, `POST /annotations/:id/submit` |
-| Admin Review Queue | `GET /admin/annotations?status=eq.submitted` |
-| Admin Decision | `POST /admin/annotations/:id/approve`, `POST /admin/annotations/:id/reject` |
+| Hacker — browse target | `GET /contracts/catalog` (hanya **`is_catalog=true`**, bukan kontrak user) |
+| Hacker Inbox (queue) | `GET /auditor-findings` (filter `contributor_id` dari header) |
+| Hacker Editor | `POST /auditor-findings`, `PATCH /auditor-findings/:id`, `POST /auditor-findings/:id/submit` (`contract_id` harus katalog admin) |
+| Admin — katalog untuk kontributor | `POST/PATCH /admin/contracts/catalog`, optional `GET` mirror |
+| Admin Review Queue | `GET /admin/auditor-findings?review_status=submitted` |
+| Admin Decision | `POST /admin/auditor-findings/:id/approve`, `POST /admin/auditor-findings/:id/reject` |
 | Dataset Export | `GET /admin/dataset/export` |
 
 > Screen 06 (Deploy progress), Screen 07 (Public trail), dan chat panel di Screen 04 di luar scope rilis ini.
@@ -84,82 +88,77 @@ Semua tabel pakai `id uuid pk`, `created_at`, `updated_at`. RLS aktif.
 
 ### `users`
 - `wallet_address text unique`
-- `is_admin bool default false` — admin punya akses review queue & approve/reject. Bootstrap dari env `ADMIN_WALLETS` saat user pertama kali muncul. **Tidak ada role hacker/user** — siapapun (yang bukan admin) boleh akses fitur annotation maupun fitur user biasa. 1 wallet bisa pakai dua mode (hacker / user) tanpa switch role di backend.
+- `is_admin bool default false` — admin punya akses review queue & approve/reject. Bootstrap dari env `ADMIN_WALLETS` saat user pertama kali muncul. **Tidak ada role hacker/user** — siapapun (yang bukan admin) boleh mengisi **`auditor_findings`** maupun fitur copilot biasa. 1 wallet bisa dua jalur tanpa switch role di backend.
 
-### `workspaces`
-- `owner_id fk users`
-- `name text`, `slug text`
+### `contracts`
+Satu row = **satu smart contract**, **satu file** source — tidak ada nested `files`.
+
+- `is_catalog boolean default false` — **`false`**: kontrak **copilot** milik user (`owner_id` = pembuat); **`true`**: **katalog admin** (bahan untuk kontributor; dibuat/diubah lewat endpoint admin; **tidak** boleh dipakai sebagai target codegen/audit user biasa di MVP ini).
+- `owner_id fk users` — untuk `is_catalog=true` biasanya admin yang menjaga row; untuk user contract = pemilik wallet.
+- `name text nullable` — label opsional di UI (default bisa tanggal / "Untitled")
 - `status enum('draft','audited')`
-- `agent_id text`, `storage_uri text` (0G storage pointer)
+- `storage_uri text` (0G aggregate pointer kalau dipakai)
 - `gas_estimate bigint`, `compile_status text`, `compiler_version text`
-
-### `files`
-- `workspace_id fk`
-- `path text` ("contract.sol", "test.sol", "README.md")
-- `og_storage_uri text` — `0g://contracts/<workspace_id>/<path>`
-- `content_hash text` — keccak256 untuk integrity check
-- `content_inline text nullable` — cache kecil (≤ 8KB) untuk render cepat tanpa fetch 0G
-- `language text`, `size_bytes int`
+- **Source tunggal** (setara `contract.sol`):
+  - `og_storage_uri text` — `0g://sources/<contract_id>/contract.sol`
+  - `content_hash text` — keccak256 untuk integrity check
+  - `content_inline text nullable` — cache kecil (≤ 8KB) untuk render cepat tanpa fetch 0G
+  - `language text` default `solidity`, `size_bytes int`
 
 ### `audits`
-- `workspace_id fk`
-- `kind enum('audit','re-audit','gas-opt','codegen','auto-fix')`
+- `contract_id fk`
 - `status enum('pending','running','succeeded','failed')`
-- `agent_id text`, `model text`, `prompt_template text`
+- `model text`, `prompt_template text` — nilai yang dipakai job itu (untuk jejak audit); pemilihan model **bukan** dari preferensi user — tetap dari konfigurasi server (env / konstanta Edge Function).
 - `og_compute_job_id text` — 0G Compute job id (untuk poll status & retrieve result)
 - `og_compute_provider text` — node/provider yang execute job di 0G network
-- `reasoning_uri text` — `0g://reasoning/<audit_id>/trace.json`
-- `reasoning_hash text` — keccak256 dari reasoning artifact (untuk verify)
-- `findings_uri text` — `0g://findings/<audit_id>/findings.json`
-- `anchor_tx_hash text nullable` — opsional, anchor `reasoning_hash` di 0G testnet
-- `confidence numeric`
-- `summary text`
+- `summary text nullable` — ringkasan agregat job (opsional; **bukan** reasoning/detail per temuan)
 - `started_at`, `completed_at`
 
-### `findings`
-- `audit_id fk`
+### `ai_findings` (output inferensi — audit / gas-opt / auto-fix)
+
+Satu row = satu temuan dari model AI untuk satu **`audit_id`**.
+
+- `audit_id fk audits` — **wajib**
 - `severity enum('critical','high','medium','low','info')`
-- `title text` ("reentrancy", "missing access control", atau label gas-opt seperti "storage packing")
+- `title text` — judul temuan ("reentrancy", …)
+- `description text` — narasi AI
 - `file_path text`, `line_start int`, `line_end int`, `function_name text`
-- `description text`
 - `confidence numeric`
-- `gas_saved bigint nullable` — diisi kalau finding berasal dari `audits.kind='gas-opt'`
-- `status enum('open','fixed','dismissed','accepted')`
-- `reasoning_trace jsonb` — inline steps untuk render cepat di Screen 08
-- `reasoning_uri text` — full trace di `0g://reasoning/<audit_id>/<finding_id>.json`
-- `reasoning_hash text` — keccak anchor
-- `remediation jsonb` (`{before, after, explanation}`) — juga dipakai sebagai diff untuk gas-opt
+- `gas_saved bigint nullable` — jika dari alur **`POST /ai-gas-opt`**
+- `status enum('open','fixed','dismissed','accepted')` — lifecycle remediation
+- **Reasoning (tidak di `audits`)**: `reasoning_trace jsonb`, `reasoning_uri text` — `0g://reasoning/<ai_finding_id>/trace.json`, `reasoning_hash text`
+- `anchor_tx_hash text nullable` — opsional anchor **`reasoning_hash`** on-chain
+- `remediation jsonb` (`{before, after, explanation}`) — termasuk diff gas-opt
 
-### `annotations` (hacker-contributed labels untuk dataset training)
+### `auditor_findings` (input auditor manusia untuk dataset)
 
-Satu row = satu kontribusi annotation oleh hacker terhadap satu smart contract. Hacker isi 4 field utama: **smart contract code**, **category**, **severity**, **root cause analysis** (long text). Lifecycle: `draft` → `submitted` → `approved` / `rejected`. Hanya yang `approved` masuk dataset.
+Satu row = satu kontribusi auditor terhadap **kontrak katalog admin**. Tidak ada FK ke `audits`.
 
-**Storage strategy**: saat `draft`/`submitted`, semua konten (code + root_cause) disimpan di Postgres saja (`code` & `root_cause` columns). Upload ke 0G Storage **baru terjadi saat admin approve** — sekaligus generate dataset row.
-
-- `hacker_id fk users` — kontributor (any user; tidak ada role check)
-- `reviewer_id fk users nullable` — admin yang approve/reject
-- `status enum('draft','submitted','approved','rejected')`
-- `category text` — kategori vulnerability (e.g. `reentrancy`, `access-control`, `arithmetic-overflow`, `tx-origin`, `oracle-manipulation`, `gas-griefing`, `none`)
+- `contributor_id fk users`
+- `contract_id fk contracts` — **wajib**, **`is_catalog=true`**
 - `severity enum('critical','high','medium','low','info')`
-- `code text` — smart contract source (disimpan inline di Postgres selama review)
-- `root_cause text` — long-text root cause analysis tulisan hacker
-- `code_uri text nullable` — `0g://annotations/<annotation_id>/source.sol` (terisi setelah approve)
-- `code_hash text nullable` — keccak256 source (terisi setelah approve)
-- `analysis_uri text nullable` — `0g://annotations/<annotation_id>/analysis.md` (terisi setelah approve)
-- `analysis_hash text nullable` — keccak256 root_cause (terisi setelah approve)
-- `review_notes text nullable` — catatan admin (alasan reject / komentar approval)
-- `dataset_uri text nullable` — `0g://dataset/<annotation_id>.jsonl` (terisi setelah approve)
-- `dataset_hash text nullable`
+- `title text` — label / kategori vuln (mis. `access-control`, `none`)
+- `description text` — root cause panjang
+- `review_status enum('draft','submitted','approved','rejected')`
 - `submitted_at`, `decided_at`
+- Setelah admin approve — artifact dataset:
+  - `code_uri text nullable` — `0g://contributions/<auditor_finding_id>/source.sol`
+  - `code_hash text nullable`
+  - `analysis_uri text nullable` — `0g://contributions/<auditor_finding_id>/analysis.md`
+  - `analysis_hash text nullable`
+  - `dataset_uri text nullable` — `0g://dataset/auditor-findings/<auditor_finding_id>.jsonl`
+  - `dataset_hash text nullable`
+
+**Storage strategy auditor**: `draft`/`submitted` → Postgres (`description`, dll.); source Solidity dari row **`contracts`** katalog. Upload 0G + baris dataset **saat approve**.
 
 ### `dataset_snapshots` (versi kumulatif export untuk training)
 
 - `version text` ("v0.1", "v0.2", …)
-- `manifest_uri text` — `0g://dataset/snapshots/<version>/manifest.json` (list semua `annotation_id` + `dataset_uri` + `hash`)
+- `manifest_uri text` — `0g://dataset/snapshots/<version>/manifest.json` (list `auditor_finding_id` berstatus `approved` + `dataset_uri` + `hash`)
 - `manifest_hash text`
-- `bundle_uri text` — `0g://dataset/snapshots/<version>/dataset.jsonl` (gabungan semua approved annotations)
+- `bundle_uri text` — `0g://dataset/snapshots/<version>/dataset.jsonl` (gabungan semua **`auditor_findings`** approved)
 - `bundle_hash text`
-- `annotation_count int`
+- `auditor_finding_count int` — jumlah row **`auditor_findings`** `approved` yang masuk snapshot
 - `created_by fk users` (admin)
 - `notes text`
 
@@ -171,11 +170,16 @@ Karena auth lewat header tanpa signature, **PostgREST tidak di-expose ke publik*
 
 Aturan akses:
 
-- `workspaces` / `files` / `audits` / `findings`: filter `owner_id = <user_id>` di setiap query.
-- `annotations`:
-  - Caller (any user) — SELECT/INSERT/UPDATE rownya sendiri (`hacker_id = <user_id>`) **selama `status` ∈ {`draft`,`submitted`}**. Tidak boleh edit setelah `approved`/`rejected`. Tidak ada role-check — siapapun yang punya wallet boleh nge-annotate.
-  - Admin (`is_admin = true`) — SELECT semua, UPDATE field `status` / `reviewer_id` / `review_notes` / `decided_at`.
-  - SELECT public (anonim) hanya untuk row `status='approved'` — opsional preview dataset.
+- `contracts`:
+  - **Dashboard copilot**: `GET .../contracts` → `owner_id = <user_id>` **dan** `is_catalog = false`.
+  - **Katalog kontributor**: `GET .../contracts/catalog` → semua authenticated user boleh baca `is_catalog = true` (read-only). Kontrak user lain **tidak** muncul di sini.
+  - **Penulisan katalog**: hanya admin (`POST/PATCH .../admin/contracts/catalog`).
+- `audits`: hanya jika `contracts.owner_id = <user_id>` **dan** `contracts.is_catalog = false` (via `contract_id`).
+- `ai_findings`: hanya jika parent **`audits`** mengarah ke kontrak milik caller (`contracts.owner_id = <user_id>`).
+- `auditor_findings`:
+  - Caller biasa — SELECT/INSERT/UPDATE rownya sendiri (`contributor_id = <user_id>`) **selama `review_status` ∈ {`draft`,`submitted`}**. **`contract_id` → `is_catalog=true`** (cek setiap write). Tidak boleh edit setelah `approved`/`rejected`.
+  - **Admin**: SELECT semua untuk queue; UPDATE `review_status` / `decided_at` / URI hash dataset.
+  - SELECT publik (anonim) opsional: hanya `review_status='approved'` — preview dataset.
 - `dataset_snapshots`: SELECT public, INSERT/UPDATE hanya admin.
 
 ---
@@ -184,63 +188,68 @@ Aturan akses:
 
 Semua endpoint via Edge Function. Tidak ada PostgREST publik. Tiap request **wajib** bawa header `X-Wallet-Address` (kecuali endpoint yang di-mark public). Middleware resolve user dari header sebelum handler jalan.
 
-### Workspaces
-- `GET /functions/v1/workspaces` — list workspace milik wallet.
-- `POST /functions/v1/workspaces` body: `{name, slug?}` → buat workspace baru, owner = caller.
-- `GET /functions/v1/workspaces/:id` — detail workspace + files + audits + findings (cek `owner_id`).
-- `PATCH /functions/v1/workspaces/:id` body partial.
+### Smart contracts (copilot — milik user)
+- `GET /functions/v1/contracts` — list **`is_catalog=false`** dan **`owner_id`** = caller (dashboard user).
+- `POST /functions/v1/contracts` body: `{name?}` → **`is_catalog=false`**, owner = caller.
+- `GET /functions/v1/contracts/:id` — detail + audits + **`ai_findings`** terkait audit itu; **tolak** jika bukan milik caller atau jika `is_catalog=true` (pakai endpoint katalog).
+- `PATCH /functions/v1/contracts/:id` — sama syarat ownership + non-catalog; update source → re-upload 0G.
 
-### Files
-- `GET /functions/v1/workspaces/:id/files`
-- `PATCH /functions/v1/files/:id` body: `{content}` → re-upload ke 0G Storage, refresh `content_hash` & `og_storage_uri`.
+### Katalog admin (untuk POV kontributor / hacker)
+- `GET /functions/v1/contracts/catalog` — list kontrak **`is_catalog=true`** saja (semua wallet authenticated). **Tidak** menyertakan kontrak upload user.
+- `GET /functions/v1/contracts/catalog/:id` — baca detail + source (read-only) untuk UI kontributor.
+
+### Admin — kelola katalog
+- `POST /functions/v1/admin/contracts/catalog` body: `{name?, content}` → buat row **`is_catalog=true`** (`owner_id` = admin atau policy internal konsisten).
+- `PATCH /functions/v1/admin/contracts/catalog/:id` — ubah nama/source katalog.
 
 ### AI Orchestration (Edge Functions — async pattern)
 
-Pola umum: client `POST` → server bikin row `audits.status='pending'` + dispatch ke 0G Compute → return `audit_id` → **client polling** `GET /functions/v1/audits/:id` setiap 2–3 detik sampai `status='succeeded'`/`'failed'` (lalu fetch `findings` sekali). Sumber data UI inference overlay (Screen 04 audit / Screen 03 codegen / Screen 05 gas-opt).
+Pola umum: client `POST` → server bikin row `audits.status='pending'` + dispatch ke 0G Compute → return `audit_id` → **client polling** `GET /functions/v1/audits/:id` setiap 2–3 detik sampai `status='succeeded'`/`'failed'` (response menyertakan **`ai_findings`** terbaru). Sumber data UI inference overlay (Screen 04 audit / Screen 03 codegen / Screen 05 gas-opt).
 
 Tambahan endpoint untuk polling:
-- `GET /functions/v1/audits/:id` — return row `audits` + `findings` terbaru.
-- `GET /functions/v1/audits?workspace_id=...&status=running` — opsional, list audit yang masih jalan.
+- `GET /functions/v1/audits/:id` — return row `audits` + **`ai_findings`** terbaru untuk audit itu. **Jika `status='running'`**, handler **reconcile**: panggil 0G `getJob`, lalu upload artifact + update DB seperti §6.1 (satu request bisa menuntaskan job tanpa cron).
+- `GET /functions/v1/ai-findings/:id` — detail satu **`ai_findings`** (cek akses lewat `audit_id` → `contracts.owner_id`).
+- `GET /functions/v1/audits?contract_id=...&status=running` — opsional, list audit yang masih jalan untuk satu smart contract.
 
-- `POST /functions/v1/ai-codegen` body: `{workspace_id?, prompt}` → `{audit_id, workspace_id}`. Hasil: file `contract.sol` ter-generate.
-- `POST /functions/v1/ai-audit` body: `{workspace_id}` → `{audit_id}`. Generate findings.
-- `POST /functions/v1/ai-auto-fix` body: `{finding_id}` → `{audit_id}` (kind=auto-fix). Patch langsung ditimpa ke file workspace, finding lama ditandai `status='fixed'`.
-- `POST /functions/v1/ai-gas-opt` body: `{workspace_id}` → `{audit_id}` (kind=gas-opt). Hasil per item disimpan sebagai `findings` dengan `gas_saved` + `remediation` (diff before/after).
+- `POST /functions/v1/ai-codegen` body: `{contract_id, prompt}` → `{audit_id}`. **`contract_id` harus `is_catalog=false` dan milik caller.** Menulis hasil ke source kontrak user itu.
+- `POST /functions/v1/ai-audit` body: `{contract_id}` → `{audit_id}`. Syarat sama (**bukan** kontrak katalog).
+- `POST /functions/v1/ai-auto-fix` body: `{ai_finding_id}` → `{audit_id}`. Harus merujuk **`ai_findings`** (bukan auditor). Patch source kontrak user; row **`ai_findings`** yang di-fix ditandai `status='fixed'`.
+- `POST /functions/v1/ai-gas-opt` body: `{contract_id}` → `{audit_id}`. **`is_catalog=false`** + milik caller.
 
 ### Settings (Me)
 - `GET /functions/v1/me` → row user berdasarkan header.
-- `PATCH /functions/v1/me` body: `{settings?, agent_id?}`.
+- `PATCH /functions/v1/me` body: `{settings?}`.
 
-### Hacker Annotations
+### Auditor findings (tabel `auditor_findings`)
 
-Bisa diakses oleh user manapun (tidak ada role gating) — 1 wallet boleh pakai fitur ini sambil tetap pakai fitur user biasa.
+Auditor memilih **kontrak katalog** (`GET /contracts/catalog`), lalu mengisi analisis — tidak menyentuh kontrak upload user lain.
 
-- `GET /functions/v1/annotations` — daftar annotation milik caller (semua status).
-- `POST /functions/v1/annotations` body: `{code, category, severity, root_cause}` → INSERT row `status='draft'`. **Tidak upload ke 0G** — semua disimpan inline di Postgres (`code`, `root_cause` columns).
-- `PATCH /functions/v1/annotations/:id` body partial: `{code?, category?, severity?, root_cause?}` → update kolom langsung. Hanya saat `status ∈ {draft,submitted}`.
-- `POST /functions/v1/annotations/:id/submit` → set `status='submitted'`, `submitted_at=now()`, freeze field utama. Validasi: keempat field (code, category, severity, root_cause) wajib non-empty.
+- `GET /functions/v1/auditor-findings` — daftar row milik caller (semua `review_status`).
+- `POST /functions/v1/auditor-findings` body: `{contract_id, title, severity, description}` — **`contract_id` → `is_catalog=true`**. INSERT `review_status='draft'`.
+- `PATCH /functions/v1/auditor-findings/:id` — partial `{contract_id?, title?, severity?, description?}`; `contract_id` tetap harus katalog; hanya saat `review_status ∈ {draft,submitted}` dan pemilik row.
+- `POST /functions/v1/auditor-findings/:id/submit` → `review_status='submitted'`, `submitted_at=now()`.
 
-### Admin Review
+### Admin Review (`auditor_findings`)
 
 Hanya `users.is_admin = true`.
 
-- `GET /functions/v1/admin-annotations?status=submitted` — review queue.
-- `POST /functions/v1/admin-annotation-approve` body: `{annotation_id, review_notes?}`:
-  1. Read `code` & `root_cause` dari Postgres.
-  2. Upload `code` → `0g://annotations/<id>/source.sol`, set `code_uri/code_hash`.
-  3. Upload `root_cause` → `0g://annotations/<id>/analysis.md`, set `analysis_uri/analysis_hash`.
-  4. Build dataset row format SFT:
+- `GET /functions/v1/admin/auditor-findings?review_status=submitted` — antrian.
+- `POST /functions/v1/admin/auditor-findings/:id/approve`:
+  1. Load **`auditor_findings`** + **`contracts`** katalog; ambil source saat approve.
+  2. Upload source → `0g://contributions/<auditor_finding_id>/source.sol`, set `code_uri` / `code_hash`.
+  3. Upload `description` → `0g://contributions/<auditor_finding_id>/analysis.md`, set `analysis_uri` / `analysis_hash`.
+  4. Build dataset row SFT, mis.:
      ```json
      {"messages":[
        {"role":"system","content":"You are a smart-contract security auditor. Identify the vulnerability category, severity, and explain the root cause."},
-       {"role":"user","content":"<code>"},
-       {"role":"assistant","content":"Category: <category>\nSeverity: <severity>\n\nRoot cause:\n<root_cause>"}
+       {"role":"user","content":"<source_dari_kontrak_katalog>"},
+       {"role":"assistant","content":"Category: <title>\nSeverity: <severity>\n\nRoot cause:\n<description>"}
      ]}
      ```
-  5. Upload ke `0g://dataset/<annotation_id>.jsonl`, simpan `dataset_uri/dataset_hash`.
-  6. UPDATE `status='approved'`, `reviewer_id`, `decided_at`, `review_notes`.
-- `POST /functions/v1/admin-annotation-reject` body: `{annotation_id, review_notes}` → `status='rejected'`, `decided_at`, `review_notes`. Tidak upload ke 0G, tidak generate dataset row.
-- `POST /functions/v1/admin-dataset-snapshot` body: `{version, notes?}` — bundle semua `approved` annotations jadi satu JSONL, upload ke 0G, buat row `dataset_snapshots`.
+  5. Upload ke `0g://dataset/auditor-findings/<auditor_finding_id>.jsonl`, simpan `dataset_uri` / `dataset_hash`.
+  6. UPDATE `review_status='approved'`, `decided_at=now()`.
+- `POST /functions/v1/admin/auditor-findings/:id/reject` → `review_status='rejected'`, `decided_at=now()`. Tidak upload ke 0G.
+- `POST /functions/v1/admin-dataset-snapshot` body: `{version, notes?}` — bundle semua **`auditor_findings`** `review_status='approved'` jadi satu JSONL, upload ke 0G, buat row `dataset_snapshots`.
 - `GET /functions/v1/admin-dataset-export?version=<v>` — return signed URL ke `bundle_uri` di 0G untuk di-download oleh training pipeline.
 
 ---
@@ -253,47 +262,42 @@ Pola yang dipakai semua endpoint AI (codegen, audit, auto-fix, gas-opt). Edge Fu
 
 ```
 [Client] ──POST──▶ [Edge Function]
-                       │ 1. resolve user dari X-Wallet-Address header, cek owner_id
-                       │ 2. INSERT audits(status='pending', kind=...)
-                       │ 3. fetch context: files dari 0G Storage (atau content_inline)
-                       │ 4. build prompt: template + system + workspace context + grounding
+                       │ 1. resolve user dari X-Wallet-Address header, cek contracts.owner_id
+                       │ 2. INSERT audits(status='pending', ...)
+                       │ 3. fetch context: source smart contract dari 0G Storage (atau content_inline)
+                       │ 4. build prompt: template + system + source Solidity + grounding
                        │ 5. dispatch ke 0G Compute:
                        │      ogCompute.submitJob({
-                       │        model: 'claude-3.7-sonnet',
-                       │        prompt, max_tokens, agent_id
+                       │        model: '<dari konfigurasi server>',
+                       │        prompt, max_tokens
                        │      }) → returns og_compute_job_id
                        │ 6. UPDATE audits SET og_compute_job_id, status='running'
                        └────── return {audit_id} ───▶ [Client]
                                                           │
-                                                          └─ poll GET /audits/:id
-                                                             setiap 2–3s hingga
-                                                             status='succeeded' / 'failed'
+                                                          └─ poll GET /audits/:id setiap 2–3s
+                                                             hingga status='succeeded' / 'failed'
 
-[pg_cron 5s] ──▶ [poller Edge Function]
-                       │ for each audits.status='running':
+[Client] ──GET /audits/:id──▶ [Edge Function — reconcile on read]
+                       │ Jika audit ini masih status='running':
                        │   result = ogCompute.getJob(og_compute_job_id)
-                       │   if result.status == 'completed':
+                       │   if completed:
                        │     a. parse output JSON
-                       │     b. compile check (kalau kind=codegen/auto-fix) via solc-wasm
-                       │     c. upload reasoning trace → 0G Storage
-                       │          uri = 0g://reasoning/<audit_id>/trace.json
-                       │          hash = keccak256(content)
-                       │     d. upload findings (termasuk gas-opt items) → 0G Storage
-                       │     e. (opsional) anchor hash on-chain:
-                       │          anchorContract.anchor(audit_id, hash, uri)
-                       │          → save anchor_tx_hash
-                       │     f. INSERT findings rows (with uri+hash; gas_saved diisi untuk kind=gas-opt)
-                       │     g. UPDATE audits status='succeeded'
-                       │   if result.status == 'failed':
-                       │     UPDATE audits status='failed', error
-                       │   if elapsed > 120s and status='running':
-                       │     emit timeout event (Screen 10 error #1)
+                       │     b. compile check jika output mengubah source Solidity (codegen / auto-fix) via solc-wasm
+                       │     c. INSERT ai_findings rows (confidence, reasoning_trace,
+                       │        gas_saved jika gas-opt; remediation sesuai output)
+                       │     d. per row: upload reasoning → 0g://reasoning/<ai_finding_id>/trace.json;
+                       │        UPDATE reasoning_uri, reasoning_hash (dan anchor_tx_hash jika dipakai)
+                       │     e. UPDATE audits status='succeeded'
+                       │   if failed / timeout (>120s): UPDATE audits status='failed', error
+                       │ Selalu return audit + ai_findings terbaru (setelah reconcile jika running)
 ```
+
+**Tanpa `pg_cron` / poller terpisah.** Audit **hanya** dimulai dari request user (analyze / codegen / dll.). Setelah itu FE yang polling; **setiap** `GET /audits/:id` yang mengenai baris `running` bertanggung jawab **sekali** mengecek 0G dan mem-finalkan DB bila job sudah selesai — jadi tidak perlu background scheduler.
 
 ### 6.2 0G Compute integration detail
 
 - **SDK**: pakai `@0glabs/0g-serving-broker` (TypeScript) atau direct REST kalau sudah expose. Wrapper di Edge Function: `lib/og-compute.ts`.
-- **Model selection**: pull dari `users.settings.model` (default `claude-3.7-sonnet`). 0G Compute jalanin via decentralized provider network.
+- **Model**: satu nilai untuk seluruh deployment — dari env Edge Function (mis. `AI_MODEL`, default `claude-3.7-sonnet`). Tidak ada switch agent/model di UI atau kolom `agent_id` di DB. 0G Compute jalan via decentralized provider network.
 - **Auth ke 0G**: hot wallet server (private key di Supabase Vault) sign request payment + job submission.
 - **Cost tracking**: simpan `og_compute_cost` per audit (untuk display di settings/billing nanti).
 
@@ -306,11 +310,11 @@ Pola yang dipakai semua endpoint AI (codegen, audit, auto-fix, gas-opt). Edge Fu
   ```
   - Upload bytes ke 0G Storage node.
   - Return `0g://<namespace>/<key>` + `keccak256(content)`.
-- **Download helper** (untuk verify reasoning):
+- **Download helper** (untuk verify reasoning **`ai_findings`**):
   ```ts
   async function ogFetch(uri): {content, hash}
   ```
-- **Encryption**: konten private (source code) di-encrypt symmetric (AES-GCM), key disimpan di Supabase Vault per-workspace. Reasoning/findings public-read jadi plain.
+- **Encryption**: konten private (source code) di-encrypt symmetric (AES-GCM), key disimpan di Supabase Vault **per smart contract** (`contract_id`). Artifact reasoning **`ai_findings`** dan dataset **`auditor_findings`** (path publik di §8) sesuai tabel storage.
 
 ### 6.4 Compile validation
 
@@ -332,13 +336,13 @@ Validasi compile (codegen / auto-fix): `solc-js` (WASM) di Edge Function. Kalau 
 
 ## 7. Live Update — FE Polling
 
-Tidak pakai websocket / Supabase Realtime. FE melakukan polling HTTP biasa:
+Tidak pakai websocket / Supabase Realtime / **pg_cron**. FE melakukan polling HTTP biasa; **sinkronisasi hasil 0G ke Postgres terjadi di dalam handler `GET /audits/:id`** selama audit masih `running` (lihat §6.1).
 
 | Event | Polling endpoint | Interval | Stop condition |
 |---|---|---|---|
 | Audit/codegen/gas-opt/auto-fix progress | `GET /functions/v1/audits/:id` | 2–3 detik | `status` ∈ {`succeeded`,`failed`} |
-| Findings streaming | (gabung di response `GET /audits/:id`) | sama | sama |
-| Annotation review queue (admin) | `GET /functions/v1/admin-annotations?status=submitted` | manual refresh atau 10 detik | — |
+| `ai_findings` di UI audit | (gabung di response `GET /audits/:id`) | sama | sama |
+| Antrian auditor (admin) | `GET /functions/v1/admin/auditor-findings?review_status=submitted` | manual refresh atau 10 detik | — |
 
 Catatan FE:
 - Pakai exponential backoff sederhana kalau response lama (mis. 2s → 3s → 5s, cap 5s).
@@ -349,120 +353,107 @@ Catatan FE:
 
 ## 8. Storage Layout — 0G Storage as primary
 
-Semua artifact konten by default di **0G Storage** supaya match narasi "verified on 0G" + reasoning hash bisa di-verify (opsional anchor on-chain).
+Semua artifact konten by default di **0G Storage** supaya match narasi "verified on 0G" + **hash reasoning per `ai_findings`** bisa di-verify (opsional anchor on-chain). Metadata temuan AI di Postgres; trace full per **`ai_finding_id`** di 0G.
 
 | Namespace | Isi | Akses |
 |---|---|---|
-| `0g://contracts/<workspace_id>/<path>` | Source file workspace (latest state) | private (encrypted, key di Supabase Vault) |
-| `0g://reasoning/<audit_id>/trace.json` | Reasoning trace AI (steps untuk Screen 08) | public-read, hash di-anchor on-chain (opsional) |
-| `0g://findings/<audit_id>/findings.json` | Full findings + remediation diff (termasuk gas-opt diff) | public-read, anchored (opsional) |
-| `0g://annotations/<annotation_id>/source.sol` | Smart contract yang di-annotate (upload **hanya saat approved**) | public-read |
-| `0g://annotations/<annotation_id>/analysis.md` | Root cause analysis (long text) — upload **hanya saat approved** | public-read |
-| `0g://dataset/<annotation_id>.jsonl` | Single-row training sample (format SFT) | private, akses lewat admin signed URL |
-| `0g://dataset/snapshots/<version>/dataset.jsonl` | Bundle dataset cumulative (semua approved) | private, akses lewat admin signed URL |
-| `0g://dataset/snapshots/<version>/manifest.json` | Manifest list annotation_id + hash | private |
+| `0g://sources/<contract_id>/contract.sol` | Source Solidity — kontrak **user** dan **katalog admin** (latest state per row) | private (encrypted, key di Supabase Vault per `contract_id`) |
+| `0g://reasoning/<ai_finding_id>/trace.json` | Reasoning AI untuk satu **`ai_findings`** (Screen 08) | public-read, anchor opsional per row |
+| `0g://contributions/<auditor_finding_id>/source.sol` | Snapshot source katalog (upload **hanya saat approved**) | public-read |
+| `0g://contributions/<auditor_finding_id>/analysis.md` | Root cause auditor (upload **hanya saat approved**) | public-read |
+| `0g://dataset/auditor-findings/<auditor_finding_id>.jsonl` | Satu baris SFT per **`auditor_findings`** approved | private, signed URL admin |
+| `0g://dataset/snapshots/<version>/dataset.jsonl` | Bundle cumulative approved auditor findings | private, akses lewat admin signed URL |
+| `0g://dataset/snapshots/<version>/manifest.json` | Manifest list `auditor_finding_id` approved + hash | private |
 
 **Postgres** simpan: `og_storage_uri`, `content_hash`, dan optional `content_inline` cache (≤8KB) — bukan content besar.
 
 **Supabase Storage** opsional sebagai fallback cache kalau 0G gateway lambat saat demo (asset non-critical: avatar, og-image share).
 
-### 8.1 Hacker Annotation Pipeline (dataset training)
+### 8.1 Auditor findings → dataset training
 
-End-to-end flow:
+End-to-end flow (tabel **`auditor_findings`**):
 
 ```
-[Hacker] ─POST /annotations────▶ [Edge Function]
-   {code, category,                │ INSERT annotations(status='draft',
-    severity, root_cause}          │   code, root_cause, category, severity)
-                                   │ (no 0G upload yet — Postgres only)
-                                   ▼
-[Hacker] ─PATCH /annotations/:id─▶ iterate; UPDATE Postgres columns langsung
-[Hacker] ─POST /annotations/:id/submit─▶ status='submitted', notify admin
+[Auditor] ─GET /contracts/catalog──▶ pilih target (is_catalog=true)
+[Auditor] ─POST /auditor-findings──▶ [Edge Function]
+   {contract_id, title,             │ INSERT auditor_findings(review_status='draft')
+    severity, description}
+                                      ▼
+[Auditor] ─PATCH /auditor-findings/:id──▶ iterate
+[Auditor] ─POST /auditor-findings/:id/submit──▶ review_status='submitted'
 
-[Admin] ──GET /admin-annotations?status=submitted──▶ review queue (read code + root_cause dari Postgres)
-[Admin] ──POST /admin-annotation-approve──┐
-                                          │ 1. read code + root_cause dari Postgres
-                                          │ 2. upload code → 0g://annotations/<id>/source.sol
-                                          │ 3. upload root_cause → 0g://annotations/<id>/analysis.md
-                                          │ 4. build SFT row:
-                                          │    {messages:[
-                                          │      {role:"system","content":"You are a smart-contract security auditor..."},
-                                          │      {role:"user","content":<code>},
-                                          │      {role:"assistant","content":"Category: <category>\nSeverity: <severity>\n\nRoot cause:\n<root_cause>"}
-                                          │    ]}
-                                          │ 5. upload → 0g://dataset/<id>.jsonl
-                                          │ 6. UPDATE status='approved', code_uri/hash, analysis_uri/hash,
-                                          │      dataset_uri/hash, reviewer_id, decided_at
+[Admin] ──GET /admin/auditor-findings?review_status=submitted──▶ queue
+[Admin] ──POST /admin/auditor-findings/:id/approve──┐
+                                          │ snapshot source katalog + upload artifacts
+                                          │ → 0g://contributions/<auditor_finding_id>/…
+                                          │ → 0g://dataset/auditor-findings/<auditor_finding_id>.jsonl
+                                          │ UPDATE review_status='approved', decided_at
                                           ▼
-                                     dataset row ready
 
-[Admin] ──POST /admin-annotation-reject──┐
-                                         │ UPDATE status='rejected', review_notes (no 0G upload)
-                                         ▼
-                                      reviewer flow done
+[Admin] ──POST /admin/auditor-findings/:id/reject──▶ review_status='rejected', decided_at (no 0G)
 
 [Admin] ──POST /admin-dataset-snapshot {version}──▶
-            bundle semua approved → 0g://dataset/snapshots/<v>/dataset.jsonl
+            bundle approved auditor_findings → 0g://dataset/snapshots/<v>/dataset.jsonl
             INSERT dataset_snapshots row
-[Admin] ──GET /admin-dataset-export?version=v───▶ signed URL untuk training pipeline (lihat ai/load_lora.py)
+[Admin] ──GET /admin-dataset-export?version=v───▶ signed URL (mis. `ai/load_lora.py`)
 ```
 
 **Catatan integrity**:
-- Saat approve, server **wajib** re-fetch dari 0G dan recompute keccak256 → match dengan `code_hash`/`annotation_hash` yang tersimpan di Postgres. Kalau tidak cocok → reject otomatis ("storage tampered").
-- Setelah `approved`, row tidak boleh di-edit (RLS deny UPDATE selain admin yang bisa tambah `notes`). Audit trail lewat `decided_at`/`reviewer_id`.
+- Saat approve, server **wajib** re-fetch dari 0G dan recompute keccak256 → match dengan `code_hash` / `analysis_hash` di Postgres. Kalau tidak cocok → reject otomatis ("storage tampered").
+- Setelah `review_status='approved'`, row tidak boleh di-edit oleh auditor (UPDATE diblok). Waktu keputusan di `decided_at`.
 - Dataset snapshots immutable per `version`; revision = bikin version baru.
 
 **Role**:
-- Hanya ada flag `is_admin`. Tidak ada role hacker/user terpisah — siapapun (yang bukan admin) bisa pakai fitur annotation.
+- Hanya ada flag `is_admin`. Tidak ada role hacker/user terpisah — siapapun (yang bukan admin) bisa menulis **`auditor_findings`**.
 - Admin di-bootstrap via env `ADMIN_WALLETS` di Edge Function — saat user pertama kali muncul (auto-insert dari header), kalau wallet match list → set `is_admin=true`.
 
 ### 8.2 Hash anchor flow (opsional)
 
 1. Edge Function upload artifact ke 0G Storage → dapat `og_storage_uri` + `content_hash` (keccak256).
-2. (Opsional) Submit tx ke contract anchor di 0G testnet (Galileo):
+2. (Opsional) Submit tx ke contract anchor di 0G testnet (Galileo), **per `ai_findings`**:
    ```solidity
-   function anchor(bytes32 audit_id, bytes32 content_hash, string uri)
+   function anchor(bytes32 ai_finding_id, bytes32 reasoning_hash, string reasoning_uri)
    ```
-3. Simpan `anchor_tx_hash` di row `audits` / `findings` / `annotations` / `dataset_snapshots`.
-4. Tombol "verify reasoning hash" di FE: re-fetch dari 0G Storage, recompute keccak, compare ke `content_hash` (di DB atau on-chain). Verdict ✓ / ✗.
+3. Simpan `anchor_tx_hash` di row **`ai_findings`** yang bersangkutan, atau `dataset_snapshots` untuk bundle dataset — **bukan** di `audits`.
+4. Tombol "verify reasoning" di FE: pilih **`ai_findings`** → re-fetch `0g://reasoning/<ai_finding_id>/trace.json`, recompute keccak, bandingkan dengan **`ai_findings.reasoning_hash`**. Verdict ✓ / ✗.
 
 ---
 
 ## 9. Roadmap Implementasi (urutan pengerjaan)
 
 ### Phase 1 — Foundation (hari 1)
-1. Init Supabase project + migration awal: `users`, `workspaces`, `files`.
+1. Init Supabase project + migration awal: `users`, `contracts` (kolom `is_catalog`; tanpa `files`).
 2. Edge Function middleware `resolveUser(req)` — baca `X-Wallet-Address`, upsert `users`, return `{user_id, role}`.
 3. Bootstrap admin via env `ADMIN_WALLETS`.
 
-### Phase 2 — Workspace CRUD (hari 1–2)
-5. Test PostgREST endpoints workspaces + files.
-6. DB trigger on `files` UPDATE: re-upload ke 0G Storage, recompute `content_hash`, refresh `og_storage_uri`.
+### Phase 2 — Smart contract CRUD (hari 1–2)
+5. Endpoint `/contracts` (user) + `/contracts/catalog` (read) + `/admin/contracts/catalog` (admin); patch user tidak boleh menyentuh `is_catalog=true`.
+6. DB trigger atau logic di handler: saat source di row `contracts` berubah → re-upload ke 0G Storage, recompute `content_hash`, refresh `og_storage_uri`.
 7. Edge Function `ai-codegen` (mock dulu pakai static response → swap ke 0G).
 
 ### Phase 3 — AI Audit Pipeline (hari 2–3)
-8. Tabel `audits`, `findings`. RLS.
+8. Tabel `audits`, `ai_findings`. RLS.
 9. `ai-audit` Edge Function + integrasi 0G Compute.
 10. `ai-auto-fix`, `ai-gas-opt` (reuse orchestration template).
-11. `GET /audits/:id` endpoint untuk polling FE; verifikasi response include findings terbaru.
+11. `GET /audits/:id` + `GET /ai-findings/:id`; response polling include **`ai_findings`** terbaru.
 
-### Phase 4 — Hacker Annotation Pipeline (hari 3–4)
-12. Tabel `annotations`, `dataset_snapshots`. Server-side filter dengan role gating (`hacker`/`admin`).
-13. Edge Functions: `annotations` CRUD, `annotations/:id/submit`, `admin-annotation-approve`, `admin-annotation-reject`.
+### Phase 4 — Auditor findings & dataset (hari 3–4)
+12. Tabel **`auditor_findings`** (`contract_id` → katalog) + `dataset_snapshots`. Validasi server tiap write.
+13. Edge Functions: `/auditor-findings`, `/admin/auditor-findings/...` (approve snapshot dari katalog).
 14. Hash re-verify saat approve (fetch 0G, keccak compare, reject if mismatch).
 15. `admin-dataset-snapshot` + `admin-dataset-export` (signed URL).
 
 ### Phase 5 — Settings & Polish (hari 4–5)
 17. Settings PATCH endpoint + validation.
 18. Error mapping ke Screen 10 (timeout 60s, wallet rejected, network mismatch, invalid AI output).
-19. Rate limit Edge Functions (1 inference/15s/user, 5 annotation submit/hari/hacker).
+19. Rate limit Edge Functions (1 inference/15s/user, 5 submit **`auditor_findings`**/hari/wallet).
 20. Logging + audit trail untuk debugging hackathon demo.
 
 ---
 
 ## 10. Open Questions / Risk
 
-- **0G Compute long-poll vs webhook**: kalau 0G belum support webhook, Edge Function harus polling — pakai Supabase Cron / pg_cron tiap 5s untuk check `audits.status='running'`.
+- **0G Compute completion**: status job dicek saat **client polling `GET /audits/:id`** (reconcile on read). Webhook dari 0G (kalau suatu saat ada) bisa jadi optimasi opsional; MVP tidak wajib cron background.
 - **On-chain anchor**: opsional di MVP. Kalau dipakai, butuh hot wallet server-side untuk sign anchor tx → simpan key di Supabase Vault.
 - **Header-based auth = trust client**: tidak ada signature verification. OK untuk hackathon, harus diganti ke SIWE/JWT sebelum produksi. Rate-limit per `X-Wallet-Address` jadi advisory, bukan security boundary.
 
