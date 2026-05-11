@@ -1,5 +1,5 @@
-import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase } from '../../_shared/supabase.ts';
-import { uploadToOgStorage, fetchFromOgStorage } from '../../_shared/og-storage.ts';
+import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase } from '../_shared/supabase.ts';
+import { uploadToOgStorage, fetchFromOgStorage } from '../_shared/og-storage.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -221,8 +221,8 @@ async function handleCreateDatasetSnapshot(req: Request, auth: { user_id: string
   const manifest = {
     version,
     created_at: new Date().toISOString(),
-    auditor_finding_ids: approvedFindings.map(f => f.id),
-    findings: approvedFindings.map(f => ({
+    auditor_finding_ids: approvedFindings.map((f: any) => f.id),
+    findings: approvedFindings.map((f: any) => ({
       id: f.id,
       dataset_uri: f.dataset_uri,
       dataset_hash: f.dataset_hash,
@@ -233,7 +233,7 @@ async function handleCreateDatasetSnapshot(req: Request, auth: { user_id: string
     })),
   };
 
-  const datasetLines = approvedFindings.map(f => {
+  const datasetLines = approvedFindings.map((f: any) => {
     return JSON.stringify({ id: f.id, dataset_uri: f.dataset_uri, dataset_hash: f.dataset_hash });
   }).join('\n');
 

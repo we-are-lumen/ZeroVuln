@@ -1,5 +1,5 @@
-import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase } from '../../_shared/supabase.ts';
-import { submitComputeJob, getComputeJob, uploadToOgStorage } from '../../_shared/og-storage.ts';
+import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase } from '../_shared/supabase.ts';
+import { submitComputeJob, getComputeJob, uploadToOgStorage } from '../_shared/og-storage.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -155,11 +155,11 @@ async function processAiOutput(auditId: string, contractId: string, kind: string
       remediation: finding.remediation || null,
     });
 
-    if (kind === 'auto_fix' && finding.remediation?.after) {
+    if (kind === 'auto_fix' && (finding.remediation as any)?.after) {
       await supabase
         .from('contracts')
         .update({
-          content_inline: finding.remediation.after.length <= 8192 ? finding.remediation.after : null,
+          content_inline: (finding.remediation as any).after.length <= 8192 ? (finding.remediation as any).after : null,
         })
         .eq('id', contractId);
     }
