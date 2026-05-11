@@ -58,16 +58,18 @@ Umumnya error return format:
 ```json
 {
   "name": "My Contract",
-  "source": {
-    "code": "pragma solidity ^0.8.0; ...",
-    "metadata": {}
-  },
+  "source_code": [
+    {
+      "path": "Contract.sol",
+      "code": "pragma solidity ^0.8.0; contract A {}"
+    }
+  ],
   "language": "solidity",
   "expired_at": "2026-12-31T23:59:59Z"
 }
 ```
 - Body required fields:
-  - `source: object (JSON)`
+  - `source_code: object[] (JSON array of objects)`
   - `expired_at: string (ISO datetime)`
 - Body optional fields:
   - `name?: string`
@@ -83,17 +85,20 @@ Umumnya error return format:
 ```json
 {
   "name": "New Name",
-  "source": {
-    "code": "updated solidity source...",
-    "metadata": {}
-  },
-  "status": "draft"
+  "source_code": [
+    { "path": "Contract.sol", "code": "updated solidity source..." }
+  ],
+  "language": "solidity",
+  "status": "draft",
+  "expired_at": "2027-01-31T23:59:59Z"
 }
 ```
 - Body optional fields:
   - `name?: string`
-  - `source?: object (JSON)`
+  - `source_code?: object[]`
+  - `language?: string`
   - `status?: string`
+  - `expired_at?: string (ISO datetime)`
 
 #### `DELETE /contracts/:contract_uuid`
 - Query params: none
@@ -123,19 +128,20 @@ Umumnya error return format:
 ```json
 {
   "name": "Target A",
-  "source": {
-    "code": "pragma solidity ^0.8.0; ...",
-    "metadata": {}
-  },
+  "source_code": [
+    { "path": "Target.sol", "code": "pragma solidity ^0.8.0; contract Target {}" }
+  ],
   "language": "solidity",
-  "expired_at": "2026-12-31T23:59:59Z"
+  "expired_at": "2026-12-31T23:59:59Z",
+  "reward_per_finding": 0
 }
 ```
 - Body fields:
-  - `source: object (JSON, required)`
+  - `source_code: object[] (required)`
   - `expired_at: string (ISO datetime, required)`
   - `name?: string`
   - `language?: string` (default: `solidity`)
+  - `reward_per_finding?: number` (default: `0`)
 
 #### `PATCH /contract_catalog/admin/:contract_uuid`
 - Query params: none
@@ -143,20 +149,20 @@ Umumnya error return format:
 ```json
 {
   "name": "Updated Target Name",
-  "source": {
-    "code": "updated solidity source...",
-    "metadata": {}
-  },
-  "compile_status": "compiled",
-  "compiler_version": "0.8.24"
+  "source_code": [
+    { "path": "Target.sol", "code": "updated solidity source..." }
+  ],
+  "language": "solidity",
+  "expired_at": "2027-01-31T23:59:59Z",
+  "reward_per_finding": 5
 }
 ```
 - Body optional fields:
   - `name?: string`
-  - `source?: object (JSON)`
-  - `compile_status?: string`
-  - `compiler_version?: string`
+  - `source_code?: object[]`
+  - `language?: string`
   - `expired_at?: string (ISO datetime)`
+  - `reward_per_finding?: number`
 
 ### 4.3 AI Trigger
 
@@ -242,8 +248,6 @@ Semua endpoint di bawah return `202`:
 }
 ```
 - Allowed value (umum): `open | fixed | dismissed | accepted`
-- Notes:
-  - Saat `status=accepted`, backend akan upload snapshot reasoning finding ke 0G Storage dan mengisi `reasoning_uri` + `reasoning_hash` pada record finding.
 
 ### 4.6 Auditor Findings (user kontribusi)
 
@@ -259,7 +263,9 @@ Semua endpoint di bawah return `202`:
   "contract_id": "<catalog_contract_uuid>",
   "title": "reentrancy",
   "severity": "high",
-  "description": "..."
+  "description": "...",
+  "line_start": 42,
+  "line_end": 50
 }
 ```
 - Required fields:
@@ -267,6 +273,9 @@ Semua endpoint di bawah return `202`:
   - `title: string`
   - `severity: "critical" | "high" | "medium" | "low" | "info"`
   - `description: string`
+- Optional fields:
+  - `line_start?: number (>=1)`
+  - `line_end?: number (>= line_start)`
 
 #### `GET /auditor-findings/:auditor_finding_uuid`
 - Query params: none
@@ -280,7 +289,9 @@ Semua endpoint di bawah return `202`:
   "contract_id": "<catalog_contract_uuid>",
   "title": "access-control",
   "severity": "medium",
-  "description": "updated analysis"
+  "description": "updated analysis",
+  "line_start": 10,
+  "line_end": 20
 }
 ```
 - Body optional fields:
@@ -288,6 +299,8 @@ Semua endpoint di bawah return `202`:
   - `title?: string`
   - `severity?: "critical" | "high" | "medium" | "low" | "info"`
   - `description?: string`
+  - `line_start?: number`
+  - `line_end?: number`
 
 #### `PATCH /auditor-findings/:auditor_finding_uuid/submit`
 - Query params: none
@@ -311,24 +324,11 @@ Semua endpoint ini butuh user admin.
 - Query params: none
 - Request body: none
 
-### 4.8 Me / Settings
+### 4.8 Me
 
 #### `GET /me`
 - Query params: none
 - Request body: none
-
-#### `PATCH /me`
-- Query params: none
-- Request body:
-```json
-{
-  "settings": {
-    "theme": "dark"
-  }
-}
-```
-- Required fields:
-  - `settings: object`
 
 ## 5) Polling Pattern (FE)
 
@@ -375,10 +375,9 @@ curl -X POST "${BASE_URL}/contracts" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "My Contract",
-    "source": {
-      "code": "pragma solidity ^0.8.0; contract A {}",
-      "metadata": {}
-    },
+    "source_code": [
+      { "path": "Contract.sol", "code": "pragma solidity ^0.8.0; contract A {}" }
+    ],
     "language": "solidity",
     "expired_at": "2026-12-31T23:59:59Z"
   }'
@@ -399,10 +398,9 @@ curl -X PATCH "${BASE_URL}/contracts/${CONTRACT_UUID}" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "New Name",
-    "source": {
-      "code": "pragma solidity ^0.8.0; contract A { uint x; }",
-      "metadata": {}
-    },
+    "source_code": [
+      { "path": "Contract.sol", "code": "pragma solidity ^0.8.0; contract A { uint x; }" }
+    ],
     "status": "draft"
   }'
 ```
@@ -452,12 +450,12 @@ curl -X POST "${BASE_URL}/contract_catalog/admin" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Target A",
-    "source": {
-      "code": "pragma solidity ^0.8.0; contract Target {}",
-      "metadata": {}
-    },
+    "source_code": [
+      { "line": 1, "code": "pragma solidity ^0.8.0; contract Target {}" }
+    ],
     "language": "solidity",
-    "expired_at": "2026-12-31T23:59:59Z"
+    "expired_at": "2026-12-31T23:59:59Z",
+    "reward_per_finding": 0
   }'
 ```
 
@@ -469,13 +467,12 @@ curl -X PATCH "${BASE_URL}/contract_catalog/admin/${CATALOG_CONTRACT_UUID}" \
   -H "Content-Type: application/json" \
   -d '{
     "name": "Updated Target",
-    "source": {
-      "code": "pragma solidity ^0.8.0; contract Target { uint x; }",
-      "metadata": {}
-    },
-    "compile_status": "compiled",
-    "compiler_version": "0.8.24",
-    "expired_at": "2027-01-31T23:59:59Z"
+    "source_code": [
+      { "path": "Target.sol", "code": "pragma solidity ^0.8.0; contract Target { uint x; }" }
+    ],
+    "language": "solidity",
+    "expired_at": "2027-01-31T23:59:59Z",
+    "reward_per_finding": 5
   }'
 ```
 
@@ -581,7 +578,9 @@ curl -X POST "${BASE_URL}/auditor-findings" \
     "contract_id": "'"${CATALOG_CONTRACT_UUID}"'",
     "title": "reentrancy",
     "severity": "high",
-    "description": "state update after external call"
+    "description": "state update after external call",
+    "line_start": 42,
+    "line_end": 50
   }'
 ```
 
@@ -601,7 +600,9 @@ curl -X PATCH "${BASE_URL}/auditor-findings/${AUDITOR_FINDING_UUID}" \
   -d '{
     "title": "access-control",
     "severity": "medium",
-    "description": "missing onlyOwner on setter"
+    "description": "missing onlyOwner on setter",
+    "line_start": 10,
+    "line_end": 20
   }'
 ```
 
@@ -635,24 +636,11 @@ curl -X POST "${BASE_URL}/admin/auditor-findings/${AUDITOR_FINDING_UUID}/reject"
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
 ```
 
-### 7.8 Me / Settings
+### 7.8 Me
 
 #### GET /me
 ```bash
 curl -X GET "${BASE_URL}/me" \
   -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### PATCH /me
-```bash
-curl -X PATCH "${BASE_URL}/me" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "settings": {
-      "theme": "dark"
-    }
-  }'
 ```
