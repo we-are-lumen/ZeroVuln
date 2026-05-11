@@ -40,7 +40,7 @@ Deno.serve(async (req: Request) => {
 async function handleListContracts(auth: { user_id: number; is_admin: boolean }) {
   const { data, error } = await supabase
     .from('contracts')
-    .select('uuid, name, is_catalog, status, storage_uri, gas_estimate, compile_status, compiler_version, og_storage_uri, content_hash, content_inline, language, size_bytes, reward_per_approved, reward_per_finding, created_at, updated_at, audits(uuid, status, kind, created_at)')
+    .select('uuid, name, source, is_catalog, status, storage_uri, gas_estimate, compile_status, compiler_version, og_storage_uri, content_hash, content_inline, language, size_bytes, reward_per_finding, expired_at, created_at, updated_at, audits(uuid, status, kind, created_at)')
     .eq('owner_id', auth.user_id)
     .eq('is_catalog', false)
     .order('created_at', { ascending: false });
@@ -53,7 +53,7 @@ async function handleGetContract(auth: { user_id: number; is_admin: boolean }, i
   const { data, error } = await supabase
     .from('contracts')
     .select(`
-      uuid, name, owner_id, is_catalog, status, storage_uri, gas_estimate, compile_status, compiler_version, og_storage_uri, content_hash, content_inline, language, size_bytes, reward_per_approved, reward_per_finding, created_at, updated_at,
+      uuid, name, source, owner_id, is_catalog, status, storage_uri, gas_estimate, compile_status, compiler_version, og_storage_uri, content_hash, content_inline, language, size_bytes, reward_per_finding, expired_at, created_at, updated_at,
       audits(
         uuid, status, kind, model, summary, error, started_at, completed_at, created_at,
         ai_findings(uuid, severity, title, description, file_path, line_start, line_end, function_name, confidence, gas_saved, status, reasoning_trace, reasoning_uri, remediation, created_at)
@@ -74,16 +74,23 @@ async function handleCreateContract(req: Request, auth: { user_id: number }) {
   if (!body) return badRequest('Invalid JSON body');
 
   const name = body.name || `Contract ${new Date().toISOString().split('T')[0]}`;
-  const source = body.source || '';
+  if (!body.source || typeof body.source !== 'object' || Array.isArray(body.source)) {
+    return badRequest('source must be a JSON object');
+  }
+  const sourceJson = body.source as Record<string, unknown>;
+  const sourceCode = typeof sourceJson.code === 'string' ? sourceJson.code : '';
   const language = body.language || 'solidity';
+  if (!body.expired_at || typeof body.expired_at !== 'string') {
+    return badRequest('expired_at is required');
+  }
 
   let ogStorageUri = '';
   let contentHash = '';
-  let contentInline = source.length <= 8192 ? source : null;
+  let contentInline = sourceCode.length <= 8192 ? sourceCode : null;
 
-  if (source) {
+  if (sourceCode) {
     try {
-      const result = await uploadToOgStorage('sources', `${crypto.randomUUID()}/contract.sol`, source);
+      const result = await uploadToOgStorage('sources', `${crypto.randomUUID()}/contract.sol`, sourceCode);
       ogStorageUri = result.uri;
       contentHash = result.hash;
     } catch (e) {
@@ -97,11 +104,13 @@ async function handleCreateContract(req: Request, auth: { user_id: number }) {
       owner_id: auth.user_id,
       is_catalog: false,
       name,
+      source: sourceJson,
       language,
       og_storage_uri: ogStorageUri,
       content_hash: contentHash,
       content_inline: contentInline,
-      size_bytes: source.length,
+      size_bytes: sourceCode.length,
+      expired_at: body.expired_at,
     })
     .select()
     .single();
@@ -128,12 +137,18 @@ async function handleUpdateContract(req: Request, auth: { user_id: number }, id:
 
   if (body.name !== undefined) updates.name = body.name;
   if (body.source !== undefined) {
-    updates.content_inline = body.source.length <= 8192 ? body.source : null;
-    updates.size_bytes = body.source.length;
+    if (typeof body.source !== 'object' || body.source === null || Array.isArray(body.source)) {
+      return badRequest('source must be a JSON object');
+    }
+    const sourceJson = body.source as Record<string, unknown>;
+    const sourceCode = typeof sourceJson.code === 'string' ? sourceJson.code : '';
+    updates.source = sourceJson;
+    updates.content_inline = sourceCode.length <= 8192 ? sourceCode : null;
+    updates.size_bytes = sourceCode.length;
 
-    if (body.source) {
+    if (sourceCode) {
       try {
-        const result = await uploadToOgStorage('sources', `${existing.uuid}/contract.sol`, body.source);
+        const result = await uploadToOgStorage('sources', `${existing.uuid}/contract.sol`, sourceCode);
         updates.og_storage_uri = result.uri;
         updates.content_hash = result.hash;
       } catch (e) {
@@ -143,6 +158,7 @@ async function handleUpdateContract(req: Request, auth: { user_id: number }, id:
   }
 
   if (body.status !== undefined) updates.status = body.status;
+  if (body.expired_at !== undefined) updates.expired_at = body.expired_at;
 
   const { data, error } = await supabase
     .from('contracts')
