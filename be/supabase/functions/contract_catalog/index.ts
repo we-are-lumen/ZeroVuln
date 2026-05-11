@@ -1,4 +1,4 @@
-import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase } from '../../_shared/supabase.ts';
+import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase } from '../_shared/supabase.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {

@@ -101,23 +101,23 @@ Umumnya error return format:
 
 ### 4.2 Catalog Contracts
 
-#### `GET /contracts/catalog`
+#### `GET /contract_catalog`
 - Query params: none
 - Request body: none
 
-#### `GET /contracts/catalog/:contract_uuid`
+#### `GET /contract_catalog/:contract_uuid`
 - Query params: none
 - Request body: none
 
-#### `GET /contracts/catalog/admin`
+#### `GET /contract_catalog/admin`
 - Query params: none
 - Request body: none
 
-#### `GET /contracts/catalog/admin/:contract_uuid`
+#### `GET /contract_catalog/admin/:contract_uuid`
 - Query params: none
 - Request body: none
 
-#### `POST /contracts/catalog/admin`
+#### `POST /contract_catalog/admin`
 - Query params: none
 - Request body:
 ```json
@@ -137,7 +137,7 @@ Umumnya error return format:
   - `name?: string`
   - `language?: string` (default: `solidity`)
 
-#### `PATCH /contracts/catalog/admin/:contract_uuid`
+#### `PATCH /contract_catalog/admin/:contract_uuid`
 - Query params: none
 - Request body (partial):
 ```json
@@ -416,37 +416,37 @@ curl -X DELETE "${BASE_URL}/contracts/${CONTRACT_UUID}" \
 
 ### 7.2 Catalog Contracts
 
-#### GET /contracts/catalog
+#### GET /contract_catalog
 ```bash
-curl -X GET "${BASE_URL}/contracts/catalog" \
+curl -X GET "${BASE_URL}/contract_catalog" \
   -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
 ```
 
-#### GET /contracts/catalog/:contract_uuid
+#### GET /contract_catalog/:contract_uuid
 ```bash
-curl -X GET "${BASE_URL}/contracts/catalog/${CATALOG_CONTRACT_UUID}" \
+curl -X GET "${BASE_URL}/contract_catalog/${CATALOG_CONTRACT_UUID}" \
   -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
 ```
 
-#### GET /contracts/catalog/admin
+#### GET /contract_catalog/admin
 ```bash
-curl -X GET "${BASE_URL}/contracts/catalog/admin" \
+curl -X GET "${BASE_URL}/contract_catalog/admin" \
   -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
 ```
 
-#### GET /contracts/catalog/admin/:contract_uuid
+#### GET /contract_catalog/admin/:contract_uuid
 ```bash
-curl -X GET "${BASE_URL}/contracts/catalog/admin/${CATALOG_CONTRACT_UUID}" \
+curl -X GET "${BASE_URL}/contract_catalog/admin/${CATALOG_CONTRACT_UUID}" \
   -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
 ```
 
-#### POST /contracts/catalog/admin
+#### POST /contract_catalog/admin
 ```bash
-curl -X POST "${BASE_URL}/contracts/catalog/admin" \
+curl -X POST "${BASE_URL}/contract_catalog/admin" \
   -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
   -H "Content-Type: application/json" \
@@ -461,9 +461,9 @@ curl -X POST "${BASE_URL}/contracts/catalog/admin" \
   }'
 ```
 
-#### PATCH /contracts/catalog/admin/:contract_uuid
+#### PATCH /contract_catalog/admin/:contract_uuid
 ```bash
-curl -X PATCH "${BASE_URL}/contracts/catalog/admin/${CATALOG_CONTRACT_UUID}" \
+curl -X PATCH "${BASE_URL}/contract_catalog/admin/${CATALOG_CONTRACT_UUID}" \
   -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
   -H "Content-Type: application/json" \
