@@ -1,0 +1,14 @@
+{
+  "compilerOptions": {
+    "lib": ["deno.ns", "deno.window"],
+    "strict": true,
+    "allowJs": true
+  },
+  "tasks": {
+    "serve": "supabase functions serve",
+    "deploy": "supabase functions deploy"
+  },
+  "imports": {
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.0"
+  }
+}

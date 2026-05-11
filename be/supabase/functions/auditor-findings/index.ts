@@ -1,0 +1,189 @@
+import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase } from '../_shared/supabase.ts';
+
+Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, PATCH, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, X-Wallet-Address' } });
+  }
+
+  const auth = await resolveUser(req);
+  if (!auth) return unauthorized();
+
+  const url = new URL(req.url);
+  const pathParts = url.pathname.split('/').filter(Boolean);
+  const functionIndex = pathParts.indexOf('functions');
+
+  const afterAuditorFindings = pathParts.slice(pathParts.indexOf('auditor-findings') + 1);
+  const id = afterAuditorFindings.length > 0 && !afterAuditorFindings[0].startsWith('admin') ? afterAuditorFindings[0] : null;
+
+  if (req.method === 'GET' && !id) {
+    return handleListAuditorFindings(auth);
+  }
+
+  if (req.method === 'POST' && !id) {
+    return handleCreateAuditorFinding(req, auth);
+  }
+
+  if (req.method === 'GET' && id) {
+    return handleGetAuditorFinding(auth, id);
+  }
+
+  if (req.method === 'PATCH' && id) {
+    const subAction = afterAuditorFindings.length > 1 ? afterAuditorFindings[1] : null;
+    if (subAction === 'submit') {
+      return handleSubmitAuditorFinding(auth, id);
+    }
+    return handleUpdateAuditorFinding(req, auth, id);
+  }
+
+  return badRequest('Method not allowed');
+});
+
+async function handleListAuditorFindings(auth: { user_id: string }) {
+  const { data, error } = await supabase
+    .from('auditor_findings')
+    .select(`
+      *,
+      contracts(id, name, language, is_catalog)
+    `)
+    .eq('contributor_id', auth.user_id)
+    .order('created_at', { ascending: false });
+
+  if (error) return serverError(error.message);
+  return json(data);
+}
+
+async function handleGetAuditorFinding(auth: { user_id: string }, id: string) {
+  const { data, error } = await supabase
+    .from('auditor_findings')
+    .select(`
+      *,
+      contracts(id, name, language, is_catalog, content_inline)
+    `)
+    .eq('id', id)
+    .single();
+
+  if (error || !data) return notFound('Auditor finding not found');
+  if (data.contributor_id !== auth.user_id) return forbidden();
+
+  return json(data);
+}
+
+async function handleCreateAuditorFinding(req: Request, auth: { user_id: string }) {
+  const body = await req.json().catch(() => null);
+  if (!body) return badRequest('Invalid JSON body');
+
+  const { contract_id, title, severity, description } = body;
+
+  if (!contract_id || typeof contract_id !== 'string') {
+    return badRequest('contract_id is required');
+  }
+  if (!title || typeof title !== 'string') {
+    return badRequest('title is required');
+  }
+  if (!severity || !['critical', 'high', 'medium', 'low', 'info'].includes(severity)) {
+    return badRequest('valid severity is required');
+  }
+  if (!description || typeof description !== 'string') {
+    return badRequest('description is required');
+  }
+
+  const { data: contract, error: contractError } = await supabase
+    .from('contracts')
+    .select('id, is_catalog')
+    .eq('id', contract_id)
+    .single();
+
+  if (contractError || !contract) return notFound('Contract not found');
+  if (!contract.is_catalog) return badRequest('contract_id must reference a catalog contract');
+
+  const { data, error } = await supabase
+    .from('auditor_findings')
+    .insert({
+      contributor_id: auth.user_id,
+      contract_id,
+      title,
+      severity,
+      description,
+      review_status: 'draft',
+    })
+    .select()
+    .single();
+
+  if (error) return serverError(error.message);
+  return json(data, 201);
+}
+
+async function handleUpdateAuditorFinding(req: Request, auth: { user_id: string }, id: string) {
+  const { data: existing, error: fetchError } = await supabase
+    .from('auditor_findings')
+    .select('id, contributor_id, review_status, contract_id')
+    .eq('id', id)
+    .single();
+
+  if (fetchError || !existing) return notFound('Auditor finding not found');
+  if (existing.contributor_id !== auth.user_id) return forbidden();
+  if (['approved', 'rejected'].includes(existing.review_status)) {
+    return badRequest('Cannot update a finding after it has been approved or rejected');
+  }
+
+  const body = await req.json().catch(() => null);
+  if (!body) return badRequest('Invalid JSON body');
+
+  const updates: Record<string, unknown> = {};
+  if (body.title !== undefined) updates.title = body.title;
+  if (body.severity !== undefined) {
+    if (!['critical', 'high', 'medium', 'low', 'info'].includes(body.severity)) {
+      return badRequest('Invalid severity value');
+    }
+    updates.severity = body.severity;
+  }
+  if (body.description !== undefined) updates.description = body.description;
+  if (body.contract_id !== undefined) {
+    const { data: contract, error: contractError } = await supabase
+      .from('contracts')
+      .select('id, is_catalog')
+      .eq('id', body.contract_id)
+      .single();
+
+    if (contractError || !contract) return notFound('Contract not found');
+    if (!contract.is_catalog) return badRequest('contract_id must reference a catalog contract');
+    updates.contract_id = body.contract_id;
+  }
+
+  const { data, error } = await supabase
+    .from('auditor_findings')
+    .update(updates)
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) return serverError(error.message);
+  return json(data);
+}
+
+async function handleSubmitAuditorFinding(auth: { user_id: string }, id: string) {
+  const { data: existing, error: fetchError } = await supabase
+    .from('auditor_findings')
+    .select('id, contributor_id, review_status')
+    .eq('id', id)
+    .single();
+
+  if (fetchError || !existing) return notFound('Auditor finding not found');
+  if (existing.contributor_id !== auth.user_id) return forbidden();
+  if (!['draft', 'submitted'].includes(existing.review_status)) {
+    return badRequest('Cannot submit a finding that has been approved or rejected');
+  }
+
+  const { data, error } = await supabase
+    .from('auditor_findings')
+    .update({
+      review_status: 'submitted',
+      submitted_at: new Date().toISOString(),
+    })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) return serverError(error.message);
+  return json(data);
+}
