@@ -76,8 +76,8 @@ async function handleCreateAuditorFinding(_req: Request, auth: { user_id: number
     title?: string;
     severity?: string;
     description?: string;
-    line_start?: number;
-    line_end?: number;
+    line_start: number;
+    line_end: number;
   };
 
   if (!contract_id || typeof contract_id !== 'string') {
@@ -92,13 +92,13 @@ async function handleCreateAuditorFinding(_req: Request, auth: { user_id: number
   if (!description || typeof description !== 'string') {
     return badRequest('description is required');
   }
-  if (line_start !== undefined && (!Number.isInteger(line_start) || line_start < 1)) {
+  if (!Number.isInteger(line_start) || line_start < 1) {
     return badRequest('line_start must be a positive integer');
   }
-  if (line_end !== undefined && (!Number.isInteger(line_end) || line_end < 1)) {
+  if (!Number.isInteger(line_end) || line_end < 1) {
     return badRequest('line_end must be a positive integer');
   }
-  if (line_start !== undefined && line_end !== undefined && line_end < line_start) {
+  if (line_end < line_start) {
     return badRequest('line_end must be greater than or equal to line_start');
   }
 
@@ -119,8 +119,8 @@ async function handleCreateAuditorFinding(_req: Request, auth: { user_id: number
       title,
       severity,
       description,
-      line_start: line_start ?? null,
-      line_end: line_end ?? null,
+      line_start,
+      line_end,
       review_status: 'submitted',
       submitted_at: new Date(),
     })

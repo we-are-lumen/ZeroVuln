@@ -1,4 +1,5 @@
 import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase } from '../_shared/supabase.ts';
+import { uploadToOgStorage } from '../_shared/og-storage.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -61,7 +62,7 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
 
   const { data: finding, error: fetchError } = await supabase
     .from('auditor_findings')
-    .select('id, review_status, contracts(id, uuid, name, is_catalog)')
+    .select('id, uuid, title, severity, description, line_start, line_end, review_status, contracts(id, uuid, name, language, is_catalog, source_code)')
     .eq('uuid', id)
     .single();
 
@@ -71,10 +72,12 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
     return badRequest('Can only approve findings with review_status=submitted');
   }
 
-  const contract = (Array.isArray(finding.contracts) ? finding.contracts[0] : finding.contracts) as { id: number; uuid: string; name: string; is_catalog: boolean } | null;
+  const contract = (Array.isArray(finding.contracts) ? finding.contracts[0] : finding.contracts) as
+    | { id: number; uuid: string; name: string; language: string | null; is_catalog: boolean; source_code: unknown }
+    | null;
   if (!contract?.is_catalog) return badRequest('Contract must be a catalog contract');
 
-  const { data, error } = await supabase
+  const { data: updated, error } = await supabase
     .from('auditor_findings')
     .update({
       review_status: 'approved',
@@ -85,7 +88,54 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
     .single();
 
   if (error) return serverError(error.message);
-  return json(data);
+
+  try {
+    const snippet = sliceSourceByLines(contract.source_code, finding.line_start, finding.line_end);
+    const datasetRecord = buildDatasetRecord({
+      title: finding.title,
+      severity: finding.severity,
+      description: finding.description,
+      language: contract.language || 'solidity',
+      snippet,
+    });
+    const jsonl = JSON.stringify(datasetRecord) + '\n';
+    await uploadToOgStorage('datasets', `auditor-findings/${finding.uuid}.jsonl`, jsonl);
+  } catch (e) {
+    console.error('Failed to upload approved finding dataset to 0G Storage:', e);
+  }
+
+  return json(updated);
+}
+
+function sliceSourceByLines(sourceCode: unknown, lineStart: number, lineEnd: number): string {
+  if (!Array.isArray(sourceCode) || sourceCode.length === 0) return '';
+  const lines: string[] = [];
+  for (const entry of sourceCode) {
+    if (entry && typeof entry === 'object' && 'code' in entry) {
+      const code = (entry as { code?: unknown }).code;
+      if (typeof code === 'string') {
+        lines.push(...code.split('\n'));
+      }
+    }
+  }
+  if (lines.length === 0) return '';
+
+  const start = Number.isInteger(lineStart) && (lineStart as number) >= 1 ? (lineStart as number) : 1;
+  const end = Number.isInteger(lineEnd) && (lineEnd as number) >= start ? (lineEnd as number) : lines.length;
+  return lines.slice(start - 1, end).join('\n');
+}
+
+function buildDatasetRecord(args: {
+  title: string;
+  severity: string;
+  description: string;
+  language: string;
+  snippet: string;
+}): Record<string, string> {
+  const instruction = 'Identify the vulnerability in the following Solidity smart contract and explain why it is unsafe.';
+  const input = args.snippet;
+  const output = `Vulnerability: ${args.title} (severity: ${args.severity}).\n${args.description}`;
+  return { instruction, input, output };
 }
 
 async function handleRejectAuditorFinding(auth: { user_id: number; is_admin: boolean }, id: string) {
