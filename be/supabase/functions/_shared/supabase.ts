@@ -29,6 +29,7 @@ export async function resolveUser(req: Request): Promise<AuthContext | null> {
   const wallet = req.headers.get('X-Wallet-Address')?.toLowerCase().trim();
 
   if (!wallet || !/^0x[0-9a-f]{40}$/i.test(wallet)) {
+    console.error('Invalid wallet address:', wallet);
     return null;
   }
 
@@ -45,6 +46,7 @@ export async function resolveUser(req: Request): Promise<AuthContext | null> {
     .single();
 
   if (error || !data) {
+    console.error('Error resolving user:', error);
     return null;
   }
 
