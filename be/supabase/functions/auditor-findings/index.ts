@@ -10,7 +10,6 @@ Deno.serve(async (req: Request) => {
 
   const url = new URL(req.url);
   const pathParts = url.pathname.split('/').filter(Boolean);
-  const functionIndex = pathParts.indexOf('functions');
 
   const afterAuditorFindings = pathParts.slice(pathParts.indexOf('auditor-findings') + 1);
   const id = afterAuditorFindings.length > 0 && !afterAuditorFindings[0].startsWith('admin') ? afterAuditorFindings[0] : null;
