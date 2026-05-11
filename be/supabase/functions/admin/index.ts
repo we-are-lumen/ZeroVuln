@@ -1,5 +1,5 @@
 import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase } from '../_shared/supabase.ts';
-import { uploadToOgStorage, fetchFromOgStorage } from '../_shared/og-storage.ts';
+import { uploadToOgStorage } from '../_shared/og-storage.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -29,19 +29,6 @@ Deno.serve(async (req: Request) => {
 
     if (id && action === 'reject') {
       return handleRejectAuditorFinding(auth, id);
-    }
-  }
-
-  if (resource === 'dataset-snapshot') {
-    if (req.method === 'POST') {
-      return handleCreateDatasetSnapshot(req, auth);
-    }
-  }
-
-  if (resource === 'dataset-export') {
-    if (req.method === 'GET') {
-      const version = url.searchParams.get('version');
-      return handleDatasetExport(version);
     }
   }
 
@@ -119,38 +106,6 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
     return serverError('Failed to upload analysis to 0G Storage');
   }
 
-  const sftExample = {
-    messages: [
-      {
-        role: 'system',
-        content: 'You are a smart-contract security auditor. Identify the vulnerability category, severity, and explain the root cause.',
-      },
-      {
-        role: 'user',
-        content: sourceCode,
-      },
-      {
-        role: 'assistant',
-        content: `Category: ${finding.title}\nSeverity: ${finding.severity}\n\nRoot cause:\n${finding.description}`,
-      },
-    ],
-  };
-
-  let datasetUri = '';
-  let datasetHash = '';
-  try {
-    const result = await uploadToOgStorage(
-      'dataset/auditor-findings',
-      `${id}.jsonl`,
-      JSON.stringify(sftExample)
-    );
-    datasetUri = result.uri;
-    datasetHash = result.hash;
-  } catch (e) {
-    console.error('Failed to upload dataset:', e);
-    return serverError('Failed to upload dataset to 0G Storage');
-  }
-
   const { data, error } = await supabase
     .from('auditor_findings')
     .update({
@@ -160,8 +115,6 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
       code_hash: codeHash,
       analysis_uri: analysisUri,
       analysis_hash: analysisHash,
-      dataset_uri: datasetUri,
-      dataset_hash: datasetHash,
     })
     .eq('uuid', id)
     .select()
@@ -198,114 +151,4 @@ async function handleRejectAuditorFinding(auth: { user_id: number; is_admin: boo
 
   if (error) return serverError(error.message);
   return json(data);
-}
-
-async function handleCreateDatasetSnapshot(req: Request, auth: { user_id: number; is_admin: boolean }) {
-  if (!auth.is_admin) return forbidden();
-
-  const body = await req.json().catch(() => null);
-  if (!body) return badRequest('Invalid JSON body');
-
-  const { version, notes } = body;
-  if (!version || typeof version !== 'string') {
-    return badRequest('version is required');
-  }
-
-  const { data: approvedFindings, error: findingsError } = await supabase
-    .from('auditor_findings')
-    .select('uuid, dataset_uri, dataset_hash, code_uri, code_hash, analysis_uri, analysis_hash')
-    .eq('review_status', 'approved');
-
-  if (findingsError) return serverError(findingsError.message);
-
-  const manifest = {
-    version,
-    created_at: new Date().toISOString(),
-    auditor_finding_ids: approvedFindings.map((f: any) => f.uuid),
-    findings: approvedFindings.map((f: any) => ({
-      uuid: f.uuid,
-      dataset_uri: f.dataset_uri,
-      dataset_hash: f.dataset_hash,
-      code_uri: f.code_uri,
-      code_hash: f.code_hash,
-      analysis_uri: f.analysis_uri,
-      analysis_hash: f.analysis_hash,
-    })),
-  };
-
-  const datasetLines = approvedFindings.map((f: any) => {
-    return JSON.stringify({ uuid: f.uuid, dataset_uri: f.dataset_uri, dataset_hash: f.dataset_hash });
-  }).join('\n');
-
-  let manifestUri = '';
-  let manifestHash = '';
-  let bundleUri = '';
-  let bundleHash = '';
-
-  try {
-    const manifestResult = await uploadToOgStorage(
-      'dataset/snapshots',
-      `${version}/manifest.json`,
-      JSON.stringify(manifest, null, 2)
-    );
-    manifestUri = manifestResult.uri;
-    manifestHash = manifestResult.hash;
-
-    const bundleResult = await uploadToOgStorage(
-      'dataset/snapshots',
-      `${version}/dataset.jsonl`,
-      datasetLines
-    );
-    bundleUri = bundleResult.uri;
-    bundleHash = bundleResult.hash;
-  } catch (e) {
-    console.error('Failed to upload snapshot:', e);
-    return serverError('Failed to upload snapshot to 0G Storage');
-  }
-
-  const { data, error } = await supabase
-    .from('dataset_snapshots')
-    .insert({
-      version,
-      manifest_uri: manifestUri,
-      manifest_hash: manifestHash,
-      bundle_uri: bundleUri,
-      bundle_hash: bundleHash,
-      auditor_finding_count: approvedFindings.length,
-      created_by: auth.user_id,
-      notes: notes || null,
-    })
-    .select()
-    .single();
-
-  if (error) return serverError(error.message);
-  return json(data, 201);
-}
-
-async function handleDatasetExport(version: string | null) {
-  if (!version) {
-    const { data, error } = await supabase
-      .from('dataset_snapshots')
-      .select('version, bundle_uri, bundle_hash, auditor_finding_count, created_at')
-      .order('created_at', { ascending: false });
-
-    if (error) return serverError(error.message);
-    return json(data);
-  }
-
-  const { data, error } = await supabase
-    .from('dataset_snapshots')
-    .select('*')
-    .eq('version', version)
-    .single();
-
-  if (error || !data) return notFound('Dataset snapshot not found');
-
-  return json({
-    version: data.version,
-    bundle_uri: data.bundle_uri,
-    bundle_hash: data.bundle_hash,
-    auditor_finding_count: data.auditor_finding_count,
-    created_at: data.created_at,
-  });
 }
