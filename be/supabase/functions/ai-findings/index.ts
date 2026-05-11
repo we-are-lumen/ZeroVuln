@@ -1,4 +1,4 @@
-import { resolveUser, unauthorized, forbidden, notFound, serverError, json, supabase } from '../_shared/supabase.ts';
+import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase } from '../_shared/supabase.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -69,12 +69,7 @@ async function handleUpdateAiFinding(req: Request, auth: { user_id: number }, id
   if (contract?.is_catalog) return forbidden();
 
   const body = await req.json().catch(() => null);
-  if (!body) {
-    return new Response(JSON.stringify({ error: { code: 'BAD_REQUEST', message: 'Invalid JSON body' } }), {
-      status: 400,
-      headers: { 'Content-Type': 'application/json' },
-    });
-  }
+  if (!body) return badRequest('Invalid JSON body');
 
   const updates: Record<string, unknown> = {};
   if (body.status !== undefined) updates.status = body.status;
