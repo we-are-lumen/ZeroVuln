@@ -70,16 +70,16 @@ async function handleListAuditorFindingsQueue(reviewStatus: string | null) {
   return json(data);
 }
 
-async function handleApproveAuditorFinding(auth: { user_id: string; is_admin: boolean }, id: string) {
+async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: boolean }, id: string) {
   if (!auth.is_admin) return forbidden();
 
   const { data: finding, error: fetchError } = await supabase
     .from('auditor_findings')
     .select(`
       *,
-      contracts(id, name, is_catalog, content_inline, content_hash)
+      contracts(id, uuid, name, is_catalog, content_inline, content_hash)
     `)
-    .eq('id', id)
+    .eq('uuid', id)
     .single();
 
   if (fetchError || !finding) return notFound('Auditor finding not found');
@@ -88,7 +88,7 @@ async function handleApproveAuditorFinding(auth: { user_id: string; is_admin: bo
     return badRequest('Can only approve findings with review_status=submitted');
   }
 
-  const contract = finding.contracts as unknown as { id: string; name: string; is_catalog: boolean; content_inline: string; content_hash: string };
+  const contract = finding.contracts as unknown as { id: number; uuid: string; name: string; is_catalog: boolean; content_inline: string; content_hash: string };
   if (!contract.is_catalog) return badRequest('Contract must be a catalog contract');
 
   const sourceCode = contract.content_inline || '';
@@ -163,7 +163,7 @@ async function handleApproveAuditorFinding(auth: { user_id: string; is_admin: bo
       dataset_uri: datasetUri,
       dataset_hash: datasetHash,
     })
-    .eq('id', id)
+    .eq('uuid', id)
     .select()
     .single();
 
@@ -171,13 +171,13 @@ async function handleApproveAuditorFinding(auth: { user_id: string; is_admin: bo
   return json(data);
 }
 
-async function handleRejectAuditorFinding(auth: { user_id: string; is_admin: boolean }, id: string) {
+async function handleRejectAuditorFinding(auth: { user_id: number; is_admin: boolean }, id: string) {
   if (!auth.is_admin) return forbidden();
 
   const { data: finding, error: fetchError } = await supabase
     .from('auditor_findings')
     .select('id, review_status')
-    .eq('id', id)
+    .eq('uuid', id)
     .single();
 
   if (fetchError || !finding) return notFound('Auditor finding not found');
@@ -192,7 +192,7 @@ async function handleRejectAuditorFinding(auth: { user_id: string; is_admin: boo
       review_status: 'rejected',
       decided_at: new Date().toISOString(),
     })
-    .eq('id', id)
+    .eq('uuid', id)
     .select()
     .single();
 
@@ -200,7 +200,7 @@ async function handleRejectAuditorFinding(auth: { user_id: string; is_admin: boo
   return json(data);
 }
 
-async function handleCreateDatasetSnapshot(req: Request, auth: { user_id: string; is_admin: boolean }) {
+async function handleCreateDatasetSnapshot(req: Request, auth: { user_id: number; is_admin: boolean }) {
   if (!auth.is_admin) return forbidden();
 
   const body = await req.json().catch(() => null);
@@ -213,7 +213,7 @@ async function handleCreateDatasetSnapshot(req: Request, auth: { user_id: string
 
   const { data: approvedFindings, error: findingsError } = await supabase
     .from('auditor_findings')
-    .select('id, dataset_uri, dataset_hash, code_uri, code_hash, analysis_uri, analysis_hash')
+    .select('uuid, dataset_uri, dataset_hash, code_uri, code_hash, analysis_uri, analysis_hash')
     .eq('review_status', 'approved');
 
   if (findingsError) return serverError(findingsError.message);
@@ -221,9 +221,9 @@ async function handleCreateDatasetSnapshot(req: Request, auth: { user_id: string
   const manifest = {
     version,
     created_at: new Date().toISOString(),
-    auditor_finding_ids: approvedFindings.map((f: any) => f.id),
+    auditor_finding_ids: approvedFindings.map((f: any) => f.uuid),
     findings: approvedFindings.map((f: any) => ({
-      id: f.id,
+      uuid: f.uuid,
       dataset_uri: f.dataset_uri,
       dataset_hash: f.dataset_hash,
       code_uri: f.code_uri,
@@ -234,7 +234,7 @@ async function handleCreateDatasetSnapshot(req: Request, auth: { user_id: string
   };
 
   const datasetLines = approvedFindings.map((f: any) => {
-    return JSON.stringify({ id: f.id, dataset_uri: f.dataset_uri, dataset_hash: f.dataset_hash });
+    return JSON.stringify({ uuid: f.uuid, dataset_uri: f.dataset_uri, dataset_hash: f.dataset_hash });
   }).join('\n');
 
   let manifestUri = '';

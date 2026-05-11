@@ -37,10 +37,10 @@ Deno.serve(async (req: Request) => {
   return badRequest('Method not allowed');
 });
 
-async function handleListContracts(auth: { user_id: string; is_admin: boolean }) {
+async function handleListContracts(auth: { user_id: number; is_admin: boolean }) {
   const { data, error } = await supabase
     .from('contracts')
-    .select('*, audits(id, status, kind, created_at)')
+    .select('uuid, name, is_catalog, status, storage_uri, gas_estimate, compile_status, compiler_version, og_storage_uri, content_hash, content_inline, language, size_bytes, reward_per_approved, reward_per_finding, created_at, updated_at, audits(uuid, status, kind, created_at)')
     .eq('owner_id', auth.user_id)
     .eq('is_catalog', false)
     .order('created_at', { ascending: false });
@@ -49,17 +49,17 @@ async function handleListContracts(auth: { user_id: string; is_admin: boolean })
   return json(data);
 }
 
-async function handleGetContract(auth: { user_id: string; is_admin: boolean }, id: string) {
+async function handleGetContract(auth: { user_id: number; is_admin: boolean }, id: string) {
   const { data, error } = await supabase
     .from('contracts')
     .select(`
-      *,
+      uuid, name, owner_id, is_catalog, status, storage_uri, gas_estimate, compile_status, compiler_version, og_storage_uri, content_hash, content_inline, language, size_bytes, reward_per_approved, reward_per_finding, created_at, updated_at,
       audits(
-        id, status, kind, model, summary, error, started_at, completed_at, created_at,
-        ai_findings(id, severity, title, description, file_path, line_start, line_end, function_name, confidence, gas_saved, status, reasoning_trace, reasoning_uri, remediation, created_at)
+        uuid, status, kind, model, summary, error, started_at, completed_at, created_at,
+        ai_findings(uuid, severity, title, description, file_path, line_start, line_end, function_name, confidence, gas_saved, status, reasoning_trace, reasoning_uri, remediation, created_at)
       )
     `)
-    .eq('id', id)
+    .eq('uuid', id)
     .single();
 
   if (error || !data) return notFound('Contract not found');
@@ -69,7 +69,7 @@ async function handleGetContract(auth: { user_id: string; is_admin: boolean }, i
   return json(data);
 }
 
-async function handleCreateContract(req: Request, auth: { user_id: string }) {
+async function handleCreateContract(req: Request, auth: { user_id: number }) {
   const body = await req.json().catch(() => null);
   if (!body) return badRequest('Invalid JSON body');
 
@@ -110,11 +110,11 @@ async function handleCreateContract(req: Request, auth: { user_id: string }) {
   return json(data, 201);
 }
 
-async function handleUpdateContract(req: Request, auth: { user_id: string }, id: string) {
+async function handleUpdateContract(req: Request, auth: { user_id: number }, id: string) {
   const { data: existing, error: fetchError } = await supabase
     .from('contracts')
-    .select('owner_id, is_catalog')
-    .eq('id', id)
+    .select('id, uuid, owner_id, is_catalog')
+    .eq('uuid', id)
     .single();
 
   if (fetchError || !existing) return notFound('Contract not found');
@@ -133,7 +133,7 @@ async function handleUpdateContract(req: Request, auth: { user_id: string }, id:
 
     if (body.source) {
       try {
-        const result = await uploadToOgStorage('sources', `${id}/contract.sol`, body.source);
+        const result = await uploadToOgStorage('sources', `${existing.uuid}/contract.sol`, body.source);
         updates.og_storage_uri = result.uri;
         updates.content_hash = result.hash;
       } catch (e) {
@@ -147,7 +147,7 @@ async function handleUpdateContract(req: Request, auth: { user_id: string }, id:
   const { data, error } = await supabase
     .from('contracts')
     .update(updates)
-    .eq('id', id)
+    .eq('uuid', id)
     .select()
     .single();
 
@@ -155,18 +155,18 @@ async function handleUpdateContract(req: Request, auth: { user_id: string }, id:
   return json(data);
 }
 
-async function handleDeleteContract(auth: { user_id: string; is_admin: boolean }, id: string) {
+async function handleDeleteContract(auth: { user_id: number; is_admin: boolean }, id: string) {
   const { data: existing, error: fetchError } = await supabase
     .from('contracts')
     .select('owner_id, is_catalog')
-    .eq('id', id)
+    .eq('uuid', id)
     .single();
 
   if (fetchError || !existing) return notFound('Contract not found');
   if (existing.owner_id !== auth.user_id && !auth.is_admin) return forbidden();
   if (existing.is_catalog) return badRequest('Cannot delete catalog contract via this endpoint');
 
-  const { error } = await supabase.from('contracts').delete().eq('id', id);
+  const { error } = await supabase.from('contracts').delete().eq('uuid', id);
   if (error) return serverError(error.message);
 
   return json({ success: true });

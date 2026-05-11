@@ -20,7 +20,8 @@ Deno.serve(async (req: Request) => {
   }
 
   if (req.method === 'POST' && !id) {
-    return handleCreateAuditorFinding(req, auth);
+    const body = await req.json().catch(() => null);
+    return handleCreateAuditorFinding(req, auth, body);
   }
 
   if (req.method === 'GET' && id) {
@@ -38,12 +39,12 @@ Deno.serve(async (req: Request) => {
   return badRequest('Method not allowed');
 });
 
-async function handleListAuditorFindings(auth: { user_id: string }) {
+async function handleListAuditorFindings(auth: { user_id: number }) {
   const { data, error } = await supabase
     .from('auditor_findings')
     .select(`
       *,
-      contracts(id, name, language, is_catalog)
+      contracts(uuid, name, language, is_catalog)
     `)
     .eq('contributor_id', auth.user_id)
     .order('created_at', { ascending: false });
@@ -52,14 +53,14 @@ async function handleListAuditorFindings(auth: { user_id: string }) {
   return json(data);
 }
 
-async function handleGetAuditorFinding(auth: { user_id: string }, id: string) {
+async function handleGetAuditorFinding(auth: { user_id: number }, id: string) {
   const { data, error } = await supabase
     .from('auditor_findings')
     .select(`
       *,
-      contracts(id, name, language, is_catalog, content_inline)
+      contracts(uuid, name, language, is_catalog, content_inline)
     `)
-    .eq('id', id)
+    .eq('uuid', id)
     .single();
 
   if (error || !data) return notFound('Auditor finding not found');
@@ -68,11 +69,15 @@ async function handleGetAuditorFinding(auth: { user_id: string }, id: string) {
   return json(data);
 }
 
-async function handleCreateAuditorFinding(req: Request, auth: { user_id: string }) {
-  const body = await req.json().catch(() => null);
+async function handleCreateAuditorFinding(req: Request, auth: { user_id: number }, body: Record<string, unknown> | null) {
   if (!body) return badRequest('Invalid JSON body');
 
-  const { contract_id, title, severity, description } = body;
+  const { contract_id, title, severity, description } = body as {
+    contract_id?: string;
+    title?: string;
+    severity?: string;
+    description?: string;
+  };
 
   if (!contract_id || typeof contract_id !== 'string') {
     return badRequest('contract_id is required');
@@ -90,7 +95,7 @@ async function handleCreateAuditorFinding(req: Request, auth: { user_id: string 
   const { data: contract, error: contractError } = await supabase
     .from('contracts')
     .select('id, is_catalog')
-    .eq('id', contract_id)
+    .eq('uuid', contract_id)
     .single();
 
   if (contractError || !contract) return notFound('Contract not found');
@@ -100,7 +105,7 @@ async function handleCreateAuditorFinding(req: Request, auth: { user_id: string 
     .from('auditor_findings')
     .insert({
       contributor_id: auth.user_id,
-      contract_id,
+      contract_id: contract.id,
       title,
       severity,
       description,
@@ -113,11 +118,11 @@ async function handleCreateAuditorFinding(req: Request, auth: { user_id: string 
   return json(data, 201);
 }
 
-async function handleUpdateAuditorFinding(req: Request, auth: { user_id: string }, id: string) {
+async function handleUpdateAuditorFinding(req: Request, auth: { user_id: number }, id: string) {
   const { data: existing, error: fetchError } = await supabase
     .from('auditor_findings')
     .select('id, contributor_id, review_status, contract_id')
-    .eq('id', id)
+    .eq('uuid', id)
     .single();
 
   if (fetchError || !existing) return notFound('Auditor finding not found');
@@ -142,18 +147,18 @@ async function handleUpdateAuditorFinding(req: Request, auth: { user_id: string 
     const { data: contract, error: contractError } = await supabase
       .from('contracts')
       .select('id, is_catalog')
-      .eq('id', body.contract_id)
+      .eq('uuid', body.contract_id)
       .single();
 
     if (contractError || !contract) return notFound('Contract not found');
     if (!contract.is_catalog) return badRequest('contract_id must reference a catalog contract');
-    updates.contract_id = body.contract_id;
+    updates.contract_id = contract.id;
   }
 
   const { data, error } = await supabase
     .from('auditor_findings')
     .update(updates)
-    .eq('id', id)
+    .eq('uuid', id)
     .select()
     .single();
 
@@ -161,11 +166,11 @@ async function handleUpdateAuditorFinding(req: Request, auth: { user_id: string 
   return json(data);
 }
 
-async function handleSubmitAuditorFinding(auth: { user_id: string }, id: string) {
+async function handleSubmitAuditorFinding(auth: { user_id: number }, id: string) {
   const { data: existing, error: fetchError } = await supabase
     .from('auditor_findings')
     .select('id, contributor_id, review_status')
-    .eq('id', id)
+    .eq('uuid', id)
     .single();
 
   if (fetchError || !existing) return notFound('Auditor finding not found');
@@ -180,7 +185,7 @@ async function handleSubmitAuditorFinding(auth: { user_id: string }, id: string)
       review_status: 'submitted',
       submitted_at: new Date().toISOString(),
     })
-    .eq('id', id)
+    .eq('uuid', id)
     .select()
     .single();
 

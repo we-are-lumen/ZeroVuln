@@ -35,7 +35,7 @@ Deno.serve(async (req: Request) => {
   return notFound('Endpoint not found');
 });
 
-async function handleCodegen(req: Request, auth: { user_id: string }, body: Record<string, unknown>) {
+async function handleCodegen(req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
   const { contract_id, prompt } = body;
 
   if (!contract_id || typeof contract_id !== 'string') {
@@ -47,8 +47,8 @@ async function handleCodegen(req: Request, auth: { user_id: string }, body: Reco
 
   const { data: contract, error: contractError } = await supabase
     .from('contracts')
-    .select('id, owner_id, is_catalog, content_inline')
-    .eq('id', contract_id)
+    .select('id, uuid, owner_id, is_catalog, content_inline')
+    .eq('uuid', contract_id)
     .single();
 
   if (contractError || !contract) return notFound('Contract not found');
@@ -58,7 +58,7 @@ async function handleCodegen(req: Request, auth: { user_id: string }, body: Reco
   const { data: audit, error: auditError } = await supabase
     .from('audits')
     .insert({
-      contract_id,
+      contract_id: contract.id,
       kind: 'codegen',
       status: 'pending',
       model: Deno.env.get('AI_MODEL'),
@@ -84,7 +84,7 @@ async function handleCodegen(req: Request, auth: { user_id: string }, body: Reco
       })
       .eq('id', audit.id);
 
-    return json({ audit_id: audit.id }, 202);
+    return json({ audit_id: audit.uuid }, 202);
   } catch (e) {
     await supabase
       .from('audits')
@@ -95,7 +95,7 @@ async function handleCodegen(req: Request, auth: { user_id: string }, body: Reco
   }
 }
 
-async function handleAudit(req: Request, auth: { user_id: string }, body: Record<string, unknown>) {
+async function handleAudit(req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
   const { contract_id } = body;
 
   if (!contract_id || typeof contract_id !== 'string') {
@@ -104,8 +104,8 @@ async function handleAudit(req: Request, auth: { user_id: string }, body: Record
 
   const { data: contract, error: contractError } = await supabase
     .from('contracts')
-    .select('id, owner_id, is_catalog, content_inline')
-    .eq('id', contract_id)
+    .select('id, uuid, owner_id, is_catalog, content_inline')
+    .eq('uuid', contract_id)
     .single();
 
   if (contractError || !contract) return notFound('Contract not found');
@@ -115,7 +115,7 @@ async function handleAudit(req: Request, auth: { user_id: string }, body: Record
   const { data: audit, error: auditError } = await supabase
     .from('audits')
     .insert({
-      contract_id,
+      contract_id: contract.id,
       kind: 'audit',
       status: 'pending',
       model: Deno.env.get('AI_MODEL'),
@@ -151,7 +151,7 @@ async function handleAudit(req: Request, auth: { user_id: string }, body: Record
       })
       .eq('id', audit.id);
 
-    return json({ audit_id: audit.id }, 202);
+    return json({ audit_id: audit.uuid }, 202);
   } catch (e) {
     await supabase
       .from('audits')
@@ -162,7 +162,7 @@ async function handleAudit(req: Request, auth: { user_id: string }, body: Record
   }
 }
 
-async function handleAutoFix(req: Request, auth: { user_id: string }, body: Record<string, unknown>) {
+async function handleAutoFix(req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
   const { ai_finding_id } = body;
 
   if (!ai_finding_id || typeof ai_finding_id !== 'string') {
@@ -171,13 +171,19 @@ async function handleAutoFix(req: Request, auth: { user_id: string }, body: Reco
 
   const { data: finding, error: findingError } = await supabase
     .from('ai_findings')
-    .select('id, audit_id, contracts(id, owner_id, is_catalog, content_inline)')
-    .eq('id', ai_finding_id)
+    .select('id, uuid, audit_id, description')
+    .eq('uuid', ai_finding_id)
     .single();
 
   if (findingError || !finding) return notFound('AI finding not found');
 
-  const contract = finding.contracts as unknown as { id: string; owner_id: string; is_catalog: boolean; content_inline: string };
+  const { data: auditContract, error: auditContractError } = await supabase
+    .from('audits')
+    .select('id, contract_id, contracts(id, uuid, owner_id, is_catalog, content_inline)')
+    .eq('id', finding.audit_id)
+    .single();
+  if (auditContractError || !auditContract) return notFound('Parent audit not found');
+  const contract = auditContract.contracts as unknown as { id: number; uuid: string; owner_id: number; is_catalog: boolean; content_inline: string };
   if (contract.owner_id !== auth.user_id) return badRequest('Contract does not belong to user');
   if (contract.is_catalog) return badRequest('Cannot auto-fix catalog contract');
 
@@ -218,9 +224,9 @@ async function handleAutoFix(req: Request, auth: { user_id: string }, body: Reco
     await supabase
       .from('ai_findings')
       .update({ status: 'fixed' })
-      .eq('id', ai_finding_id);
+      .eq('uuid', ai_finding_id);
 
-    return json({ audit_id: audit.id }, 202);
+    return json({ audit_id: audit.uuid }, 202);
   } catch (e) {
     await supabase
       .from('audits')
@@ -231,7 +237,7 @@ async function handleAutoFix(req: Request, auth: { user_id: string }, body: Reco
   }
 }
 
-async function handleGasOpt(req: Request, auth: { user_id: string }, body: Record<string, unknown>) {
+async function handleGasOpt(req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
   const { contract_id } = body;
 
   if (!contract_id || typeof contract_id !== 'string') {
@@ -240,8 +246,8 @@ async function handleGasOpt(req: Request, auth: { user_id: string }, body: Recor
 
   const { data: contract, error: contractError } = await supabase
     .from('contracts')
-    .select('id, owner_id, is_catalog, content_inline')
-    .eq('id', contract_id)
+    .select('id, uuid, owner_id, is_catalog, content_inline')
+    .eq('uuid', contract_id)
     .single();
 
   if (contractError || !contract) return notFound('Contract not found');
@@ -251,7 +257,7 @@ async function handleGasOpt(req: Request, auth: { user_id: string }, body: Recor
   const { data: audit, error: auditError } = await supabase
     .from('audits')
     .insert({
-      contract_id,
+      contract_id: contract.id,
       kind: 'gas_opt',
       status: 'pending',
       model: Deno.env.get('AI_MODEL'),
@@ -283,7 +289,7 @@ async function handleGasOpt(req: Request, auth: { user_id: string }, body: Recor
       })
       .eq('id', audit.id);
 
-    return json({ audit_id: audit.id }, 202);
+    return json({ audit_id: audit.uuid }, 202);
   } catch (e) {
     await supabase
       .from('audits')

@@ -31,12 +31,12 @@ Deno.serve(async (req: Request) => {
   return handlePublicCatalog(auth, id);
 });
 
-async function handlePublicCatalog(auth: { user_id: string }, id: string | null) {
+async function handlePublicCatalog(auth: { user_id: number }, id: string | null) {
   if (id) {
     const { data, error } = await supabase
       .from('contracts')
-      .select('id, name, language, compile_status, compiler_version, gas_estimate, created_at, updated_at, content_inline')
-      .eq('id', id)
+      .select('uuid, name, language, compile_status, compiler_version, gas_estimate, reward_per_approved, reward_per_finding, created_at, updated_at, content_inline')
+      .eq('uuid', id)
       .eq('is_catalog', true)
       .single();
 
@@ -46,7 +46,7 @@ async function handlePublicCatalog(auth: { user_id: string }, id: string | null)
 
   const { data, error } = await supabase
     .from('contracts')
-    .select('id, name, language, compile_status, compiler_version, gas_estimate, created_at, updated_at')
+    .select('uuid, name, language, compile_status, compiler_version, gas_estimate, reward_per_approved, reward_per_finding, created_at, updated_at')
     .eq('is_catalog', true)
     .order('created_at', { ascending: false });
 
@@ -54,7 +54,7 @@ async function handlePublicCatalog(auth: { user_id: string }, id: string | null)
   return json(data);
 }
 
-async function handleAdminCatalog(req: Request, auth: { user_id: string; is_admin: boolean }, id: string | null) {
+async function handleAdminCatalog(req: Request, auth: { user_id: number; is_admin: boolean }, id: string | null) {
   if (req.method === 'GET' && !id) {
     const { data, error } = await supabase
       .from('contracts')
@@ -70,7 +70,7 @@ async function handleAdminCatalog(req: Request, auth: { user_id: string; is_admi
     const { data, error } = await supabase
       .from('contracts')
       .select('*')
-      .eq('id', id)
+      .eq('uuid', id)
       .eq('is_catalog', true)
       .single();
 
@@ -89,7 +89,7 @@ async function handleAdminCatalog(req: Request, auth: { user_id: string; is_admi
   return badRequest('Method not allowed');
 }
 
-async function handleCreateCatalogContract(req: Request, auth: { user_id: string }) {
+async function handleCreateCatalogContract(req: Request, auth: { user_id: number }) {
   const body = await req.json().catch(() => null);
   if (!body) return badRequest('Invalid JSON body');
 
@@ -130,13 +130,13 @@ async function handleCreateCatalogContract(req: Request, auth: { user_id: string
   return json(data, 201);
 }
 
-async function handleUpdateCatalogContract(req: Request, auth: { user_id: string; is_admin: boolean }, id: string) {
+async function handleUpdateCatalogContract(req: Request, auth: { user_id: number; is_admin: boolean }, id: string) {
   if (!auth.is_admin) return forbidden();
 
   const { data: existing, error: fetchError } = await supabase
     .from('contracts')
-    .select('id, is_catalog')
-    .eq('id', id)
+    .select('id, uuid, is_catalog')
+    .eq('uuid', id)
     .single();
 
   if (fetchError || !existing) return notFound('Catalog contract not found');
@@ -154,7 +154,7 @@ async function handleUpdateCatalogContract(req: Request, auth: { user_id: string
 
     if (body.source) {
       try {
-        const result = await uploadToOgStorage('sources', `${id}/contract.sol`, body.source);
+        const result = await uploadToOgStorage('sources', `${existing.uuid}/contract.sol`, body.source);
         updates.og_storage_uri = result.uri;
         updates.content_hash = result.hash;
       } catch (e) {
@@ -169,7 +169,7 @@ async function handleUpdateCatalogContract(req: Request, auth: { user_id: string
   const { data, error } = await supabase
     .from('contracts')
     .update(updates)
-    .eq('id', id)
+    .eq('uuid', id)
     .select()
     .single();
 

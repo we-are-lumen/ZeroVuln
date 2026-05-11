@@ -19,7 +19,7 @@ Deno.serve(async (req: Request) => {
   return badRequest('Method not allowed');
 });
 
-async function handleGetMe(auth: { user_id: string; wallet_address: string; is_admin: boolean }) {
+async function handleGetMe(auth: { user_id: number; wallet_address: string; is_admin: boolean }) {
   const { data, error } = await supabase
     .from('users')
     .select('id, wallet_address, is_admin, settings, created_at, updated_at')
@@ -30,7 +30,7 @@ async function handleGetMe(auth: { user_id: string; wallet_address: string; is_a
   return json(data);
 }
 
-async function handleUpdateMe(req: Request, auth: { user_id: string }) {
+async function handleUpdateMe(req: Request, auth: { user_id: number }) {
   const body = await req.json().catch(() => null);
   if (!body) return badRequest('Invalid JSON body');
 

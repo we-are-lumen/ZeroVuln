@@ -27,13 +27,17 @@ Deno.serve(async (req: Request) => {
   return badRequest('Method not allowed');
 });
 
-async function handleListAudits(auth: { user_id: string }, contractId: string | null, status: string | null) {
+async function handleListAudits(auth: { user_id: number }, contractId: string | null, status: string | null) {
   let query = supabase
     .from('audits')
-    .select('*, contracts(id, name, owner_id), ai_findings(count)')
+    .select('uuid, status, kind, model, prompt_template, og_compute_job_id, og_compute_provider, og_compute_cost, summary, error, started_at, completed_at, created_at, updated_at, contracts!inner(uuid, name, owner_id), ai_findings(count)')
     .eq('contracts.owner_id', auth.user_id);
 
-  if (contractId) query = query.eq('contract_id', contractId);
+  if (contractId) {
+    const { data: contract } = await supabase.from('contracts').select('id').eq('uuid', contractId).single();
+    if (!contract) return json([]);
+    query = query.eq('contract_id', contract.id);
+  }
   if (status) query = query.eq('status', status);
 
   const { data, error } = await query.order('created_at', { ascending: false });
@@ -42,19 +46,19 @@ async function handleListAudits(auth: { user_id: string }, contractId: string | 
   return json(data);
 }
 
-async function handleGetAudit(auth: { user_id: string; is_admin: boolean }, id: string) {
+async function handleGetAudit(auth: { user_id: number; is_admin: boolean }, id: string) {
   const { data: audit, error: auditError } = await supabase
     .from('audits')
     .select(`
       *,
-      contracts(id, name, owner_id, is_catalog, content_inline, og_storage_uri),
+      contracts(id, uuid, name, owner_id, is_catalog, content_inline, og_storage_uri),
       ai_findings(
-        id, severity, title, description, file_path, line_start, line_end,
+        uuid, severity, title, description, file_path, line_start, line_end,
         function_name, confidence, gas_saved, status, reasoning_trace,
         reasoning_uri, reasoning_hash, anchor_tx_hash, remediation, created_at
       )
     `)
-    .eq('id', id)
+    .eq('uuid', id)
     .single();
 
   if (auditError || !audit) return notFound('Audit not found');
@@ -70,14 +74,14 @@ async function handleGetAudit(auth: { user_id: string; is_admin: boolean }, id: 
     .from('audits')
     .select(`
       *,
-      contracts(id, name, owner_id, is_catalog, content_inline, og_storage_uri),
+      contracts(id, uuid, name, owner_id, is_catalog, content_inline, og_storage_uri),
       ai_findings(
-        id, severity, title, description, file_path, line_start, line_end,
+        uuid, severity, title, description, file_path, line_start, line_end,
         function_name, confidence, gas_saved, status, reasoning_trace,
         reasoning_uri, reasoning_hash, anchor_tx_hash, remediation, created_at
       )
     `)
-    .eq('id', id)
+    .eq('uuid', id)
     .single();
 
   if (refreshError || !refreshedAudit) return serverError('Failed to refresh audit');
@@ -92,7 +96,7 @@ async function reconcileRunningAudit(audit: Record<string, unknown>) {
     const job = await getComputeJob(jobId);
 
     if (job.status === 'completed' && job.output) {
-      await processAiOutput(audit.id as string, audit.contract_id as string, audit.kind as string, job.output);
+      await processAiOutput(audit.id as number, audit.contract_id as number, audit.kind as string, job.output);
       await supabase
         .from('audits')
         .update({ status: 'succeeded', completed_at: new Date().toISOString() })
@@ -108,7 +112,7 @@ async function reconcileRunningAudit(audit: Record<string, unknown>) {
   }
 }
 
-async function processAiOutput(auditId: string, contractId: string, kind: string, output: string) {
+async function processAiOutput(auditId: number, contractId: number, kind: string, output: string) {
   let parsed: Array<Record<string, unknown>> = [];
 
   try {

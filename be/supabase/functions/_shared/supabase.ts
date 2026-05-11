@@ -6,21 +6,23 @@ const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 export const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
 export interface User {
-  id: string;
+  id: number;
+  uuid: string;
   wallet_address: string;
   is_admin: boolean;
   settings: Record<string, unknown>;
 }
 
 export interface AuthContext {
-  user_id: string;
+  user_id: number;
+  user_uuid: string;
   wallet_address: string;
   is_admin: boolean;
 }
 
 export function getAdminWallets(): string[] {
   const env = Deno.env.get('ADMIN_WALLETS') || '';
-  return env.split(',').map(w => w.trim().toLowerCase()).filter(Boolean);
+  return env.split(',').map((w: string) => w.trim().toLowerCase()).filter(Boolean);
 }
 
 export async function resolveUser(req: Request): Promise<AuthContext | null> {
@@ -56,6 +58,7 @@ export async function resolveUser(req: Request): Promise<AuthContext | null> {
 
   return {
     user_id: data.id,
+    user_uuid: data.uuid,
     wallet_address: data.wallet_address,
     is_admin: data.is_admin,
   };

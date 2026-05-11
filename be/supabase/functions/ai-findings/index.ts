@@ -27,17 +27,17 @@ Deno.serve(async (req: Request) => {
   });
 });
 
-async function handleGetAiFinding(auth: { user_id: string; is_admin: boolean }, id: string) {
+async function handleGetAiFinding(auth: { user_id: number; is_admin: boolean }, id: string) {
   const { data: finding, error } = await supabase
     .from('ai_findings')
     .select(`
       *,
       audits(
         id, contract_id,
-        contracts(id, name, owner_id, is_catalog)
+        contracts(id, uuid, name, owner_id, is_catalog)
       )
     `)
-    .eq('id', id)
+    .eq('uuid', id)
     .single();
 
   if (error || !finding) return notFound('AI finding not found');
@@ -49,17 +49,17 @@ async function handleGetAiFinding(auth: { user_id: string; is_admin: boolean }, 
   return json(finding);
 }
 
-async function handleUpdateAiFinding(req: Request, auth: { user_id: string }, id: string) {
+async function handleUpdateAiFinding(req: Request, auth: { user_id: number }, id: string) {
   const { data: finding, error: fetchError } = await supabase
     .from('ai_findings')
     .select(`
       id,
       audits(
         id, contract_id,
-        contracts(id, name, owner_id, is_catalog)
+        contracts(id, uuid, name, owner_id, is_catalog)
       )
     `)
-    .eq('id', id)
+    .eq('uuid', id)
     .single();
 
   if (fetchError || !finding) return notFound('AI finding not found');
@@ -82,7 +82,7 @@ async function handleUpdateAiFinding(req: Request, auth: { user_id: string }, id
   const { data, error } = await supabase
     .from('ai_findings')
     .update(updates)
-    .eq('id', id)
+    .eq('uuid', id)
     .select()
     .single();
 
