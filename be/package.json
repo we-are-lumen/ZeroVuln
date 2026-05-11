@@ -8,9 +8,9 @@
     "serve": "supabase functions serve"
   },
   "dependencies": {
+    "@0glabs/0g-ts-sdk": "^0.3.3",
     "@supabase/supabase-js": "^2.45.0",
-    "@0glabs/0g-serving-broker": "^1.0.0",
-    "@0glabs/0g-ts-sdk": "^1.0.0"
+    "ethers": "^6.16.0"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

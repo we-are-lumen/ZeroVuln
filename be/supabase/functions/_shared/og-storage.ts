@@ -129,6 +129,9 @@ export async function uploadToOgStorage(namespace: string, key: string, content:
       }
 
       const rootHash = tree.rootHash();
+      if (!rootHash) {
+        throw new Error('Merkle tree root hash is empty');
+      }
       const [, uploadErr] = await indexer.upload(file, OG_RPC_URL, wallet as any);
       if (uploadErr) {
         throw new Error(`0G Storage upload failed: ${uploadErr.message}`);

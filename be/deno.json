@@ -1,8 +1,7 @@
 {
   "compilerOptions": {
     "lib": ["deno.ns", "deno.window"],
-    "strict": true,
-    "allowJs": true
+    "strict": true
   },
   "tasks": {
     "serve": "supabase functions serve",
@@ -10,5 +9,6 @@
   },
   "imports": {
     "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.45.0"
-  }
+  },
+  "nodeModulesDir": "auto"
 }

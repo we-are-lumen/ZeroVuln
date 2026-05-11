@@ -42,7 +42,9 @@ async function handleGetAiFinding(auth: { user_id: number; is_admin: boolean }, 
 
   if (error || !finding) return notFound('AI finding not found');
 
-  const contract = finding.audits?.contracts;
+  const audit = Array.isArray(finding.audits) ? finding.audits[0] : finding.audits;
+  const contracts = audit?.contracts;
+  const contract = Array.isArray(contracts) ? contracts[0] : contracts;
   if (contract?.owner_id !== auth.user_id && !auth.is_admin) return forbidden();
   if (contract?.is_catalog) return forbidden();
 
@@ -64,7 +66,9 @@ async function handleUpdateAiFinding(req: Request, auth: { user_id: number }, id
 
   if (fetchError || !finding) return notFound('AI finding not found');
 
-  const contract = finding.audits?.contracts;
+  const audit = Array.isArray(finding.audits) ? finding.audits[0] : finding.audits;
+  const contracts = audit?.contracts;
+  const contract = Array.isArray(contracts) ? contracts[0] : contracts;
   if (contract?.owner_id !== auth.user_id) return forbidden();
   if (contract?.is_catalog) return forbidden();
 
