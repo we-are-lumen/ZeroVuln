@@ -1,5 +1,4 @@
 import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase } from '../_shared/supabase.ts';
-import { uploadToOgStorage } from '../_shared/og-storage.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -40,7 +39,7 @@ async function handleListAuditorFindingsQueue(reviewStatus: string | null) {
     .from('auditor_findings')
     .select(`
       *,
-      contracts(id, name, language, is_catalog, content_inline, content_hash),
+      contracts(id, name, language, is_catalog, source_code),
       users:contributor_id(id, wallet_address)
     `)
     .order('submitted_at', { ascending: false });
@@ -62,10 +61,7 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
 
   const { data: finding, error: fetchError } = await supabase
     .from('auditor_findings')
-    .select(`
-      *,
-      contracts(id, uuid, name, is_catalog, content_inline, content_hash)
-    `)
+    .select('id, review_status, contracts(id, uuid, name, is_catalog)')
     .eq('uuid', id)
     .single();
 
@@ -75,46 +71,14 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
     return badRequest('Can only approve findings with review_status=submitted');
   }
 
-  const contract = finding.contracts as unknown as { id: number; uuid: string; name: string; is_catalog: boolean; content_inline: string; content_hash: string };
-  if (!contract.is_catalog) return badRequest('Contract must be a catalog contract');
-
-  const sourceCode = contract.content_inline || '';
-
-  let codeUri = '';
-  let codeHash = '';
-  try {
-    const result = await uploadToOgStorage('contributions', `${id}/source.sol`, sourceCode);
-    codeUri = result.uri;
-    codeHash = result.hash;
-
-    if (codeHash !== contract.content_hash) {
-      console.warn('Content hash mismatch - source may have been modified');
-    }
-  } catch (e) {
-    console.error('Failed to upload source:', e);
-    return serverError('Failed to upload source to 0G Storage');
-  }
-
-  let analysisUri = '';
-  let analysisHash = '';
-  try {
-    const result = await uploadToOgStorage('contributions', `${id}/analysis.md`, finding.description);
-    analysisUri = result.uri;
-    analysisHash = result.hash;
-  } catch (e) {
-    console.error('Failed to upload analysis:', e);
-    return serverError('Failed to upload analysis to 0G Storage');
-  }
+  const contract = (Array.isArray(finding.contracts) ? finding.contracts[0] : finding.contracts) as { id: number; uuid: string; name: string; is_catalog: boolean } | null;
+  if (!contract?.is_catalog) return badRequest('Contract must be a catalog contract');
 
   const { data, error } = await supabase
     .from('auditor_findings')
     .update({
       review_status: 'approved',
       decided_at: new Date().toISOString(),
-      code_uri: codeUri,
-      code_hash: codeHash,
-      analysis_uri: analysisUri,
-      analysis_hash: analysisHash,
     })
     .eq('uuid', id)
     .select()

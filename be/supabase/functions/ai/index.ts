@@ -1,5 +1,5 @@
 import { resolveUser, unauthorized, notFound, badRequest, serverError, json, supabase } from '../_shared/supabase.ts';
-import { submitComputeJob, getComputeJob } from '../_shared/og-storage.ts';
+import { submitComputeJob } from '../_shared/og-storage.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -35,7 +35,19 @@ Deno.serve(async (req: Request) => {
   return notFound('Endpoint not found');
 });
 
-async function handleCodegen(req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
+function flattenSource(source: unknown): string {
+  if (!Array.isArray(source)) return '';
+  const parts: string[] = [];
+  for (const entry of source) {
+    if (entry && typeof entry === 'object' && 'code' in entry) {
+      const code = (entry as { code?: unknown }).code;
+      if (typeof code === 'string') parts.push(code);
+    }
+  }
+  return parts.join('\n\n');
+}
+
+async function handleCodegen(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
   const { contract_id, prompt } = body;
 
   if (!contract_id || typeof contract_id !== 'string') {
@@ -47,7 +59,7 @@ async function handleCodegen(req: Request, auth: { user_id: number }, body: Reco
 
   const { data: contract, error: contractError } = await supabase
     .from('contracts')
-    .select('id, uuid, owner_id, is_catalog, content_inline')
+    .select('id, uuid, owner_id, is_catalog, source_code')
     .eq('uuid', contract_id)
     .single();
 
@@ -61,7 +73,6 @@ async function handleCodegen(req: Request, auth: { user_id: number }, body: Reco
       contract_id: contract.id,
       kind: 'codegen',
       status: 'pending',
-      model: Deno.env.get('AI_MODEL'),
       prompt_template: 'codegen',
     })
     .select()
@@ -71,31 +82,31 @@ async function handleCodegen(req: Request, auth: { user_id: number }, body: Reco
 
   try {
     const systemPrompt = 'You are a smart contract code generator. Generate Solidity code based on the user request. Return JSON array with fields: title, description, and the generated code in description field.';
-    const fullPrompt = `${systemPrompt}\n\nUser request: ${prompt}\n\n${contract.content_inline || ''}`;
+    const fullPrompt = `${systemPrompt}\n\nUser request: ${prompt}\n\n${flattenSource(contract.source_code)}`;
 
-    const job = await submitComputeJob(fullPrompt);
+    await submitComputeJob(fullPrompt);
 
     await supabase
       .from('audits')
       .update({
         status: 'running',
-        og_compute_job_id: job.job_id,
         started_at: new Date().toISOString(),
       })
       .eq('id', audit.id);
 
     return json({ audit_id: audit.uuid }, 202);
   } catch (e) {
+    console.error('Codegen job failed:', e);
     await supabase
       .from('audits')
-      .update({ status: 'failed', error: String(e) })
+      .update({ status: 'failed' })
       .eq('id', audit.id);
 
     return serverError('Failed to submit codegen job');
   }
 }
 
-async function handleAudit(req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
+async function handleAudit(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
   const { contract_id } = body;
 
   if (!contract_id || typeof contract_id !== 'string') {
@@ -104,7 +115,7 @@ async function handleAudit(req: Request, auth: { user_id: number }, body: Record
 
   const { data: contract, error: contractError } = await supabase
     .from('contracts')
-    .select('id, uuid, owner_id, is_catalog, content_inline')
+    .select('id, uuid, owner_id, is_catalog, source_code')
     .eq('uuid', contract_id)
     .single();
 
@@ -118,7 +129,6 @@ async function handleAudit(req: Request, auth: { user_id: number }, body: Record
       contract_id: contract.id,
       kind: 'audit',
       status: 'pending',
-      model: Deno.env.get('AI_MODEL'),
       prompt_template: 'security_audit',
     })
     .select()
@@ -131,38 +141,36 @@ async function handleAudit(req: Request, auth: { user_id: number }, body: Record
 - title: string (e.g., "reentrancy", "access-control")
 - severity: "critical" | "high" | "medium" | "low" | "info"
 - description: string (detailed explanation)
-- file_path: string (optional)
 - line_start: number (optional)
 - line_end: number (optional)
-- function_name: string (optional)
 - confidence: number (0-1)
 - remediation: { before: string, after: string, explanation: string } (optional)`;
 
-    const fullPrompt = `${systemPrompt}\n\nContract code:\n\`\`\`solidity\n${contract.content_inline || ''}\n\`\`\``;
+    const fullPrompt = `${systemPrompt}\n\nContract code:\n\`\`\`solidity\n${flattenSource(contract.source_code)}\n\`\`\``;
 
-    const job = await submitComputeJob(fullPrompt);
+    await submitComputeJob(fullPrompt);
 
     await supabase
       .from('audits')
       .update({
         status: 'running',
-        og_compute_job_id: job.job_id,
         started_at: new Date().toISOString(),
       })
       .eq('id', audit.id);
 
     return json({ audit_id: audit.uuid }, 202);
   } catch (e) {
+    console.error('Audit job failed:', e);
     await supabase
       .from('audits')
-      .update({ status: 'failed', error: String(e) })
+      .update({ status: 'failed' })
       .eq('id', audit.id);
 
     return serverError('Failed to submit audit job');
   }
 }
 
-async function handleAutoFix(req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
+async function handleAutoFix(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
   const { ai_finding_id } = body;
 
   if (!ai_finding_id || typeof ai_finding_id !== 'string') {
@@ -179,11 +187,11 @@ async function handleAutoFix(req: Request, auth: { user_id: number }, body: Reco
 
   const { data: auditContract, error: auditContractError } = await supabase
     .from('audits')
-    .select('id, contract_id, contracts(id, uuid, owner_id, is_catalog, content_inline)')
+    .select('id, contract_id, contracts(id, uuid, owner_id, is_catalog, source_code)')
     .eq('id', finding.audit_id)
     .single();
   if (auditContractError || !auditContract) return notFound('Parent audit not found');
-  const contract = auditContract.contracts as unknown as { id: number; uuid: string; owner_id: number; is_catalog: boolean; content_inline: string };
+  const contract = auditContract.contracts as unknown as { id: number; uuid: string; owner_id: number; is_catalog: boolean; source_code: unknown };
   if (contract.owner_id !== auth.user_id) return badRequest('Contract does not belong to user');
   if (contract.is_catalog) return badRequest('Cannot auto-fix catalog contract');
 
@@ -193,7 +201,6 @@ async function handleAutoFix(req: Request, auth: { user_id: number }, body: Reco
       contract_id: contract.id,
       kind: 'auto_fix',
       status: 'pending',
-      model: Deno.env.get('AI_MODEL'),
       prompt_template: 'auto_fix',
     })
     .select()
@@ -208,15 +215,14 @@ async function handleAutoFix(req: Request, auth: { user_id: number }, body: Reco
 - description: string
 - remediation: { before: string, after: string, explanation: string }`;
 
-    const fullPrompt = `${systemPrompt}\n\nContract code:\n\`\`\`solidity\n${contract.content_inline || ''}\n\`\`\`\n\nVulnerability to fix:\n${finding.description || 'Fix the identified issue'}`;
+    const fullPrompt = `${systemPrompt}\n\nContract code:\n\`\`\`solidity\n${flattenSource(contract.source_code)}\n\`\`\`\n\nVulnerability to fix:\n${finding.description || 'Fix the identified issue'}`;
 
-    const job = await submitComputeJob(fullPrompt);
+    await submitComputeJob(fullPrompt);
 
     await supabase
       .from('audits')
       .update({
         status: 'running',
-        og_compute_job_id: job.job_id,
         started_at: new Date().toISOString(),
       })
       .eq('id', audit.id);
@@ -228,16 +234,17 @@ async function handleAutoFix(req: Request, auth: { user_id: number }, body: Reco
 
     return json({ audit_id: audit.uuid }, 202);
   } catch (e) {
+    console.error('Auto-fix job failed:', e);
     await supabase
       .from('audits')
-      .update({ status: 'failed', error: String(e) })
+      .update({ status: 'failed' })
       .eq('id', audit.id);
 
     return serverError('Failed to submit auto-fix job');
   }
 }
 
-async function handleGasOpt(req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
+async function handleGasOpt(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
   const { contract_id } = body;
 
   if (!contract_id || typeof contract_id !== 'string') {
@@ -246,7 +253,7 @@ async function handleGasOpt(req: Request, auth: { user_id: number }, body: Recor
 
   const { data: contract, error: contractError } = await supabase
     .from('contracts')
-    .select('id, uuid, owner_id, is_catalog, content_inline')
+    .select('id, uuid, owner_id, is_catalog, source_code')
     .eq('uuid', contract_id)
     .single();
 
@@ -260,7 +267,6 @@ async function handleGasOpt(req: Request, auth: { user_id: number }, body: Recor
       contract_id: contract.id,
       kind: 'gas_opt',
       status: 'pending',
-      model: Deno.env.get('AI_MODEL'),
       prompt_template: 'gas_optimization',
     })
     .select()
@@ -276,24 +282,24 @@ async function handleGasOpt(req: Request, auth: { user_id: number }, body: Recor
 - gas_saved: number (estimated gas saved)
 - remediation: { before: string, after: string, explanation: string }`;
 
-    const fullPrompt = `${systemPrompt}\n\nContract code:\n\`\`\`solidity\n${contract.content_inline || ''}\n\`\`\``;
+    const fullPrompt = `${systemPrompt}\n\nContract code:\n\`\`\`solidity\n${flattenSource(contract.source_code)}\n\`\`\``;
 
-    const job = await submitComputeJob(fullPrompt);
+    await submitComputeJob(fullPrompt);
 
     await supabase
       .from('audits')
       .update({
         status: 'running',
-        og_compute_job_id: job.job_id,
         started_at: new Date().toISOString(),
       })
       .eq('id', audit.id);
 
     return json({ audit_id: audit.uuid }, 202);
   } catch (e) {
+    console.error('Gas optimization job failed:', e);
     await supabase
       .from('audits')
-      .update({ status: 'failed', error: String(e) })
+      .update({ status: 'failed' })
       .eq('id', audit.id);
 
     return serverError('Failed to submit gas optimization job');

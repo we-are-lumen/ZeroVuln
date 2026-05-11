@@ -10,7 +10,6 @@ export interface User {
   uuid: string;
   wallet_address: string;
   is_admin: boolean;
-  settings: Record<string, unknown>;
 }
 
 export interface AuthContext {

@@ -1,5 +1,4 @@
 import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase } from '../_shared/supabase.ts';
-import { submitComputeJob, getComputeJob, uploadToOgStorage } from '../_shared/og-storage.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') {
@@ -30,7 +29,7 @@ Deno.serve(async (req: Request) => {
 async function handleListAudits(auth: { user_id: number }, contractId: string | null, status: string | null) {
   let query = supabase
     .from('audits')
-    .select('uuid, status, kind, model, prompt_template, og_compute_job_id, og_compute_provider, og_compute_cost, summary, error, started_at, completed_at, created_at, updated_at, contracts!inner(uuid, name, owner_id), ai_findings(count)')
+    .select('uuid, status, kind, prompt_template, summary, started_at, completed_at, created_at, updated_at, contracts!inner(uuid, name, owner_id), ai_findings(count)')
     .eq('contracts.owner_id', auth.user_id);
 
   if (contractId) {
@@ -51,11 +50,11 @@ async function handleGetAudit(auth: { user_id: number; is_admin: boolean }, id: 
     .from('audits')
     .select(`
       *,
-      contracts(id, uuid, name, owner_id, is_catalog, content_inline, og_storage_uri),
+      contracts(id, uuid, name, owner_id, is_catalog, source_code),
       ai_findings(
-        uuid, severity, title, description, file_path, line_start, line_end,
-        function_name, confidence, gas_saved, status, reasoning_trace,
-        reasoning_uri, reasoning_hash, anchor_tx_hash, remediation, created_at
+        uuid, severity, title, description, line_start, line_end,
+        confidence, gas_saved, status, reasoning_trace,
+        remediation, created_at
       )
     `)
     .eq('uuid', id)
@@ -66,106 +65,5 @@ async function handleGetAudit(auth: { user_id: number; is_admin: boolean }, id: 
   if (audit.contracts.owner_id !== auth.user_id && !auth.is_admin) return forbidden();
   if (audit.contracts.is_catalog) return forbidden();
 
-  if (audit.status === 'running') {
-    await reconcileRunningAudit(audit);
-  }
-
-  const { data: refreshedAudit, error: refreshError } = await supabase
-    .from('audits')
-    .select(`
-      *,
-      contracts(id, uuid, name, owner_id, is_catalog, content_inline, og_storage_uri),
-      ai_findings(
-        uuid, severity, title, description, file_path, line_start, line_end,
-        function_name, confidence, gas_saved, status, reasoning_trace,
-        reasoning_uri, reasoning_hash, anchor_tx_hash, remediation, created_at
-      )
-    `)
-    .eq('uuid', id)
-    .single();
-
-  if (refreshError || !refreshedAudit) return serverError('Failed to refresh audit');
-  return json(refreshedAudit);
-}
-
-async function reconcileRunningAudit(audit: Record<string, unknown>) {
-  const jobId = audit.og_compute_job_id as string;
-  if (!jobId) return;
-
-  try {
-    const job = await getComputeJob(jobId);
-
-    if (job.status === 'completed' && job.output) {
-      await processAiOutput(audit.id as number, audit.contract_id as number, audit.kind as string, job.output);
-      await supabase
-        .from('audits')
-        .update({ status: 'succeeded', completed_at: new Date().toISOString() })
-        .eq('id', audit.id);
-    } else if (job.status === 'failed') {
-      await supabase
-        .from('audits')
-        .update({ status: 'failed', error: job.error || 'Job failed', completed_at: new Date().toISOString() })
-        .eq('id', audit.id);
-    }
-  } catch (e) {
-    console.error('Error reconciling audit:', e);
-  }
-}
-
-async function processAiOutput(auditId: number, contractId: number, kind: string, output: string) {
-  let parsed: Array<Record<string, unknown>> = [];
-
-  try {
-    const jsonMatch = output.match(/```json\s*([\s\S]*?)\s*```/) || output.match(/(\[[\s\S]*\])/);
-    if (jsonMatch) {
-      parsed = JSON.parse(jsonMatch[1] || jsonMatch[0]);
-    } else {
-      parsed = JSON.parse(output);
-    }
-  } catch {
-    parsed = [{ title: 'Analysis', description: output, severity: 'info' }];
-  }
-
-  if (!Array.isArray(parsed)) parsed = [parsed];
-
-  for (const finding of parsed) {
-    const reasoningTrace = { prompt: output, model: Deno.env.get('AI_MODEL') };
-    let reasoningUri = '';
-    let reasoningHash = '';
-
-    try {
-      const result = await uploadToOgStorage('reasoning', `${crypto.randomUUID()}/trace.json`, JSON.stringify(reasoningTrace));
-      reasoningUri = result.uri;
-      reasoningHash = result.hash;
-    } catch (e) {
-      console.error('Failed to upload reasoning trace:', e);
-    }
-
-    await supabase.from('ai_findings').insert({
-      audit_id: auditId,
-      severity: finding.severity || 'info',
-      title: finding.title || 'Untitled Finding',
-      description: finding.description || '',
-      file_path: finding.file_path || null,
-      line_start: finding.line_start || null,
-      line_end: finding.line_end || null,
-      function_name: finding.function_name || null,
-      confidence: finding.confidence || null,
-      gas_saved: finding.gas_saved || null,
-      status: 'open',
-      reasoning_trace: reasoningTrace,
-      reasoning_uri: reasoningUri,
-      reasoning_hash: reasoningHash,
-      remediation: finding.remediation || null,
-    });
-
-    if (kind === 'auto_fix' && (finding.remediation as any)?.after) {
-      await supabase
-        .from('contracts')
-        .update({
-          content_inline: (finding.remediation as any).after.length <= 8192 ? (finding.remediation as any).after : null,
-        })
-        .eq('id', contractId);
-    }
-  }
+  return json(audit);
 }

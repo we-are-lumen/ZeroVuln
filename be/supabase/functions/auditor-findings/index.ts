@@ -57,7 +57,7 @@ async function handleGetAuditorFinding(auth: { user_id: number }, id: string) {
     .from('auditor_findings')
     .select(`
       *,
-      contracts(uuid, name, language, is_catalog, content_inline)
+      contracts(uuid, name, language, is_catalog, source_code)
     `)
     .eq('uuid', id)
     .single();
@@ -68,14 +68,16 @@ async function handleGetAuditorFinding(auth: { user_id: number }, id: string) {
   return json(data);
 }
 
-async function handleCreateAuditorFinding(req: Request, auth: { user_id: number }, body: Record<string, unknown> | null) {
+async function handleCreateAuditorFinding(_req: Request, auth: { user_id: number }, body: Record<string, unknown> | null) {
   if (!body) return badRequest('Invalid JSON body');
 
-  const { contract_id, title, severity, description } = body as {
+  const { contract_id, title, severity, description, line_start, line_end } = body as {
     contract_id?: string;
     title?: string;
     severity?: string;
     description?: string;
+    line_start?: number;
+    line_end?: number;
   };
 
   if (!contract_id || typeof contract_id !== 'string') {
@@ -89,6 +91,15 @@ async function handleCreateAuditorFinding(req: Request, auth: { user_id: number 
   }
   if (!description || typeof description !== 'string') {
     return badRequest('description is required');
+  }
+  if (line_start !== undefined && (!Number.isInteger(line_start) || line_start < 1)) {
+    return badRequest('line_start must be a positive integer');
+  }
+  if (line_end !== undefined && (!Number.isInteger(line_end) || line_end < 1)) {
+    return badRequest('line_end must be a positive integer');
+  }
+  if (line_start !== undefined && line_end !== undefined && line_end < line_start) {
+    return badRequest('line_end must be greater than or equal to line_start');
   }
 
   const { data: contract, error: contractError } = await supabase
@@ -108,7 +119,10 @@ async function handleCreateAuditorFinding(req: Request, auth: { user_id: number 
       title,
       severity,
       description,
-      review_status: 'draft',
+      line_start: line_start ?? null,
+      line_end: line_end ?? null,
+      review_status: 'submitted',
+      submitted_at: new Date(),
     })
     .select()
     .single();
@@ -120,7 +134,7 @@ async function handleCreateAuditorFinding(req: Request, auth: { user_id: number 
 async function handleUpdateAuditorFinding(req: Request, auth: { user_id: number }, id: string) {
   const { data: existing, error: fetchError } = await supabase
     .from('auditor_findings')
-    .select('id, contributor_id, review_status, contract_id')
+    .select('id, contributor_id, review_status, contract_id, line_start, line_end')
     .eq('uuid', id)
     .single();
 
@@ -142,6 +156,27 @@ async function handleUpdateAuditorFinding(req: Request, auth: { user_id: number 
     updates.severity = body.severity;
   }
   if (body.description !== undefined) updates.description = body.description;
+  if (body.line_start !== undefined) {
+    if (!Number.isInteger(body.line_start) || body.line_start < 1) {
+      return badRequest('line_start must be a positive integer');
+    }
+    updates.line_start = body.line_start;
+  }
+  if (body.line_end !== undefined) {
+    if (!Number.isInteger(body.line_end) || body.line_end < 1) {
+      return badRequest('line_end must be a positive integer');
+    }
+    updates.line_end = body.line_end;
+  }
+  const nextLineStart = updates.line_start !== undefined ? Number(updates.line_start) : existing.line_start;
+  const nextLineEnd = updates.line_end !== undefined ? Number(updates.line_end) : existing.line_end;
+  if (
+    nextLineStart !== undefined && nextLineStart !== null &&
+    nextLineEnd !== undefined && nextLineEnd !== null &&
+    nextLineEnd < nextLineStart
+  ) {
+    return badRequest('line_end must be greater than or equal to line_start');
+  }
   if (body.contract_id !== undefined) {
     const { data: contract, error: contractError } = await supabase
       .from('contracts')
