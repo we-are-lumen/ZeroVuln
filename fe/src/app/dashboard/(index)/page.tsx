@@ -1,8 +1,11 @@
+import { Button } from "@/shared/components/ui/button";
 
 const DashboardPage = () => {
   return (
-    <div>DashboardPage</div>
-  )
-}
+    <div>
+      <Button variant={"outline"}>nigga</Button>
+    </div>
+  );
+};
 
-export default DashboardPage
+export default DashboardPage;
