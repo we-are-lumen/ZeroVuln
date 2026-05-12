@@ -156,6 +156,18 @@ docker run --rm -p 8000:8000 \
   zerovuln-inference
 ```
 
+### Jalankan via Docker (model di-embed ke image)
+
+Ini akan meng-copy folder `./merged_model` ke dalam image saat build (image jadi besar).
+
+```bash
+cd ai
+python load_lora.py
+
+docker build --target with-model -t zerovuln-inference-with-model .
+docker run --rm -p 8000:8000 zerovuln-inference-with-model
+```
+
 ## 5. Pull dataset dari 0G Storage (root hash dari Postgres Supabase)
 
 Script ini:
