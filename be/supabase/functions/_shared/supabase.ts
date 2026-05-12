@@ -5,6 +5,17 @@ const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 export const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+export const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, PATCH, DELETE, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type, X-Wallet-Address, Authorization, apikey',
+  'Access-Control-Max-Age': '86400',
+};
+
+export function corsPreflight(): Response {
+  return new Response(null, { status: 204, headers: corsHeaders });
+}
+
 export interface User {
   id: number;
   uuid: string;
@@ -65,44 +76,46 @@ export async function resolveUser(req: Request): Promise<AuthContext | null> {
   };
 }
 
+const jsonHeaders = { 'Content-Type': 'application/json', ...corsHeaders };
+
 export function unauthorized(): Response {
   return new Response(JSON.stringify({ error: { code: 'UNAUTHORIZED', message: 'Missing or invalid wallet address' } }), {
     status: 401,
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders,
   });
 }
 
 export function forbidden(): Response {
   return new Response(JSON.stringify({ error: { code: 'FORBIDDEN', message: 'Insufficient permissions' } }), {
     status: 403,
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders,
   });
 }
 
 export function notFound(message = 'Resource not found'): Response {
   return new Response(JSON.stringify({ error: { code: 'NOT_FOUND', message } }), {
     status: 404,
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders,
   });
 }
 
 export function badRequest(message: string, detail?: unknown): Response {
   return new Response(JSON.stringify({ error: { code: 'BAD_REQUEST', message, detail } }), {
     status: 400,
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders,
   });
 }
 
 export function serverError(message = 'Internal server error'): Response {
   return new Response(JSON.stringify({ error: { code: 'INTERNAL_ERROR', message } }), {
     status: 500,
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders,
   });
 }
 
 export function json(data: unknown, status = 200): Response {
   return new Response(JSON.stringify(data), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: jsonHeaders,
   });
 }

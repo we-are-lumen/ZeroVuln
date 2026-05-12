@@ -1,4 +1,4 @@
-import { resolveUser, unauthorized, notFound, badRequest, serverError, json, supabase } from '../_shared/supabase.ts';
+import { resolveUser, unauthorized, notFound, badRequest, serverError, json, supabase, corsPreflight } from '../_shared/supabase.ts';
 import { submitComputeJob } from '../_shared/og-storage.ts';
 
 // constant AI System Prompt
@@ -23,7 +23,7 @@ const AI_CODEGEN_SYSTEM_PROMPT = `
       3. Clarity: Use NatSpec for all functions and state variables.
 
       Output Format:
-      Respond ONLY with a valid JSON object. No conversational text.
+      Respond ONLY with a valid JSON object. No conversational text. Ensure that string values are not wrapped in markdown code blocks or backticks.
 
       JSON Structure:
       {
@@ -83,9 +83,7 @@ const AI_CODEAUDIT_SYSTEM_PROMPT = `
     `;
 
 Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type, X-Wallet-Address, Authorization' } });
-  }
+  if (req.method === 'OPTIONS') return corsPreflight();
 
   const auth = await resolveUser(req);
   if (!auth) return unauthorized();
