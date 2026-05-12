@@ -203,7 +203,6 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
       contract_id: contractId,
       kind: 'codegen',
       status: 'pending',
-      prompt_template: 'codegen',
     })
     .select()
     .single();
