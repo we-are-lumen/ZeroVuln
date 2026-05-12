@@ -99,7 +99,13 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
       snippet,
     });
     const jsonl = JSON.stringify(datasetRecord) + '\n';
-    await uploadToOgStorage('datasets', `auditor-findings/${finding.uuid}.jsonl`, jsonl);
+    const { uri, hash } = await uploadToOgStorage('datasets', `auditor-findings/${finding.uuid}.jsonl`, jsonl);
+    updated.dataset_uri = uri;
+    updated.dataset_hash = hash;
+    await supabase
+      .from('auditor_findings')
+      .update({ dataset_uri: uri, dataset_hash: hash })
+      .eq('uuid', id);
   } catch (e) {
     console.error('Failed to upload approved finding dataset to 0G Storage:', e);
   }

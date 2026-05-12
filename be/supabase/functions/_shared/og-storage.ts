@@ -1,4 +1,5 @@
-import { ZgFile, Indexer } from 'npm:@0glabs/0g-ts-sdk@0.3.3';
+import { log } from "node:console";
+import { MemData, Indexer } from 'npm:@0glabs/0g-ts-sdk@0.3.3';
 import { ethers } from 'npm:ethers@6.13.0';
 
 const OG_CHAIN_ID = Deno.env.get('OG_CHAIN_ID') || '16602';
@@ -19,6 +20,7 @@ let cachedIndexer: Indexer | null = null;
 let cachedWallet: ethers.Wallet | null = null;
 
 function getStorageIndexer(): Indexer {
+  console.warn('Getting storage indexer with config:', { OG_STORAGE_INDEXER });
   if (!cachedIndexer) {
     cachedIndexer = new Indexer(OG_STORAGE_INDEXER);
   }
@@ -113,42 +115,37 @@ export async function uploadToOgStorage(namespace: string, key: string, content:
     return uploadViaLegacyEndpoint(namespace, key, content);
   }
 
-  try {
     const indexer = getStorageIndexer();
     const wallet = getStorageWallet();
-    const suffix = key.split('.').pop() || 'txt';
-    const tempPath = await Deno.makeTempFile({ prefix: `0g-${namespace}-`, suffix: `.${suffix}` });
 
-    await Deno.writeTextFile(tempPath, content);
+    const bytes = new TextEncoder().encode(content);
+    const file = new MemData(bytes);
 
-    const file = await ZgFile.fromFilePath(tempPath);
-    try {
-      const [tree, treeErr] = await file.merkleTree();
-      if (treeErr || !tree) {
-        throw new Error(`Merkle tree error: ${treeErr}`);
-      }
-
-      const rootHash = tree.rootHash();
-      if (!rootHash) {
-        throw new Error('Merkle tree root hash is empty');
-      }
-      const [, uploadErr] = await indexer.upload(file, OG_RPC_URL, wallet as any);
-      if (uploadErr) {
-        throw new Error(`0G Storage upload failed: ${uploadErr.message}`);
-      }
-
-      return {
-        uri: `0g://${rootHash}`,
-        hash: rootHash,
-      };
-    } finally {
-      await file.close();
-      await Deno.remove(tempPath).catch(() => undefined);
+    const [tree, treeErr] = await file.merkleTree();
+    if (treeErr || !tree) {
+      throw new Error(`Merkle tree error: ${treeErr}`);
     }
-  } catch (e) {
-    console.warn('0G SDK upload failed, fallback to legacy upload endpoint:', e);
-    return uploadViaLegacyEndpoint(namespace, key, content);
-  }
+
+    const rootHash = tree.rootHash();
+    if (!rootHash) {
+      throw new Error('Merkle tree root hash is empty');
+    }
+    console.log('Merkle tree root hash:', rootHash, 'size:', file.size(), 'bytes');
+
+    const [tx, uploadErr] = await indexer.upload(
+      file,
+      OG_RPC_URL,
+      wallet as any,
+    );
+    if (uploadErr !== null) throw new Error(`Upload error: ${uploadErr}`);
+
+    console.log('0G Storage upload success:', rootHash);
+
+    if ("rootHash" in tx) {
+      return { uri: tx.rootHash, hash: tx.txHash };
+    } else {
+      return { uri: tx.rootHashes, hash: tx.txHashes };
+    }
 }
 
 export async function fetchFromOgStorage(uri: string): Promise<{ content: string; hash: string }> {
