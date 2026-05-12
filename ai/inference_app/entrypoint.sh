@@ -1,4 +1,6 @@
 #!/bin/sh
 set -e
 
-exec uvicorn inference_app.main:app --host 0.0.0.0 --port 8000
+/app/inference_app/gen-cert.sh
+
+exec /usr/local/bin/supervisord -c /etc/supervisor/supervisord.conf
