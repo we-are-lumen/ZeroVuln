@@ -57,7 +57,7 @@ def _startup() -> None:
     tokenizer = AutoTokenizer.from_pretrained(repo)
     model = AutoModelForCausalLM.from_pretrained(
         repo,
-        torch_dtype=_select_dtype(),
+        dtype=_select_dtype(),
         device_map=_device_map(),
     )
 
