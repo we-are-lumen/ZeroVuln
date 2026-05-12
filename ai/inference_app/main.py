@@ -24,9 +24,8 @@ def _select_dtype() -> torch.dtype:
     return torch.float32
 
 
-def _model_path() -> str:
-    return os.getenv("MODEL_PATH") or "./merged_model"
-
+def _model_repo() -> str:
+    return os.getenv("MODEL_REPO") or "althof3/zeroVuln"
 
 def _device_map() -> Any:
     return os.getenv("DEVICE_MAP") or "auto"
@@ -53,13 +52,11 @@ app = FastAPI(title="ZeroVuln Inference API")
 
 @app.on_event("startup")
 def _startup() -> None:
-    model_path = _model_path()
-    if not os.path.exists(model_path):
-        raise RuntimeError(f"MODEL_PATH not found: {model_path}")
+    repo = _model_repo()
 
-    tokenizer = AutoTokenizer.from_pretrained(model_path)
+    tokenizer = AutoTokenizer.from_pretrained(repo)
     model = AutoModelForCausalLM.from_pretrained(
-        model_path,
+        repo,
         torch_dtype=_select_dtype(),
         device_map=_device_map(),
     )

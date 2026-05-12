@@ -8,4 +8,5 @@ __pycache__
 .env
 
 lora_adapter
+merged_model
 datasets

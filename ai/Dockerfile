@@ -14,9 +14,7 @@ COPY inference_app /app/inference_app
 
 FROM base AS runtime
 
-# Where the downloaded model will live inside the image/container
-ENV MODEL_PATH=/app/merged_model
-# Default HF repo and subfolder; can be overridden at runtime
+# HF model loaded directly via transformers at runtime
 ENV MODEL_REPO=althof3/zeroVuln
 ENV MODEL_SUBDIR=ai/merged_model
 
