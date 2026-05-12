@@ -285,6 +285,7 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
       contract_id: contractId,
       audit_id: audit.id,
       generated_code: generatedCode,
+      mitigations
     }, 200);
   } catch (e) {
     console.error('Codegen job failed:', e);
