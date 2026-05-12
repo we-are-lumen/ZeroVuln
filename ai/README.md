@@ -112,6 +112,70 @@ python run_inference.py
 
 Ubah `prompt` di bagian bawah file untuk request berbeda.
 
+## 4. Inference API (FastAPI)
+
+Service ini membungkus logic `run_inference.py` menjadi HTTP API.
+
+### Jalankan lokal
+
+```bash
+cd ai
+python3 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt
+
+export MODEL_PATH=./merged_model
+python -m uvicorn inference_app.main:app --host 0.0.0.0 --port 8000
+```
+
+Request:
+
+```bash
+curl -s http://localhost:8000/health
+
+curl -s http://localhost:8000/generate \
+  -H 'content-type: application/json' \
+  -d '{"prompt":"Write a contract that interacts with non-standard ERC20 tokens like USDT"}'
+```
+
+Environment penting:
+
+- `MODEL_PATH` (default `./merged_model` di lokal, `/app/merged_model` di Docker)
+- `DEVICE_MAP` (default `auto`)
+- `TORCH_DTYPE` (`bf16`, `fp16`, `fp32`)
+- `SYSTEM_PROMPT` (default sama seperti `run_inference.py`)
+
+### Jalankan via Docker
+
+```bash
+cd ai
+docker build -t zerovuln-inference .
+docker run --rm -p 8000:8000 \
+  -e MODEL_PATH=/app/merged_model \
+  -v "$(pwd)/merged_model:/app/merged_model:ro" \
+  zerovuln-inference
+```
+
+## 5. Pull dataset dari 0G Storage (root hash dari Postgres Supabase)
+
+Script ini:
+- Query table `auditor_findings` di Postgres Supabase (yang `review_status='approved'` dan `dataset_uri` terisi)
+- Download konten dataset dari 0G Storage (support `dataset_uri` berupa `0x<rootHash>` atau `0g://<path>`)
+- Simpan file JSONL ke local folder
+
+Environment:
+
+- `SUPABASE_DATABASE_URL` (atau `DATABASE_URL`) koneksi Postgres Supabase
+- `OG_STORAGE_INDEXER` (default testnet turbo)
+- `OG_STORAGE_NODE` (opsional; dipakai untuk `0g://<path>` mode)
+
+Jalankan:
+
+```bash
+cd ai
+python pull_datasets_from_0g.py --out-dir ./datasets/from_0g --limit 200
+```
+
 ## Catatan
 
 - `merged_model/` dan `lora_adapter/` umumnya tidak di-commit (besar). Tambahkan ke `.gitignore` bila perlu.
