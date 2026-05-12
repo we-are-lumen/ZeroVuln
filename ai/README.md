@@ -23,6 +23,11 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+## Upload model
+```
+python3 upload_model.py --repo "althof3/zeroVuln" --folder "ZeroVuln/ai/merged_model"
+```
+
 ## 1. Generate `lora_adapter/`
 
 `lora_adapter/output_model/` berisi adapter LoRA hasil fine-tune Qwen2.5-0.5B-Instruct pada dataset smart contract aman.
