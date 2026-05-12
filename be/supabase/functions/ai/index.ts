@@ -130,6 +130,31 @@ function codeStringToSourceBlocks(code: string) {
   return code.split(/\r?\n/).map((line, index) => ({ code: line, line: index + 1 }));
 }
 
+function parseAIResponse(aiData: unknown) {
+  let payload: any = aiData;
+
+  if (payload && typeof payload === 'object' && 'response' in payload) {
+    const responseContent = payload.response;
+    if (typeof responseContent === 'string') {
+      try {
+        payload = JSON.parse(responseContent);
+      } catch (_err) {
+        payload = responseContent;
+      }
+    } else {
+      payload = responseContent;
+    }
+  }
+
+  if (payload && typeof payload === 'object') {
+    const code = typeof payload.code === 'string' ? payload.code : '';
+    const mitigations = Array.isArray(payload.vulnerability_mitigations) ? payload.vulnerability_mitigations : [];
+    return { code, mitigations, raw: payload };
+  }
+
+  return { code: typeof aiData === 'string' ? aiData : '', mitigations: [], raw: aiData };
+}
+
 async function handleCodegen(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
   const { prompt, contract_id } = body;
 
@@ -203,42 +228,42 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
     }
 
     const aiData = await aiResponse.json();
+    const parsed = parseAIResponse(aiData);
+    const generatedCode = parsed.code || '';
+    const mitigations = parsed.mitigations;
 
-    // Parse AI response (handle multiple formats)
-    let generatedCode = '';
-    let title = 'Generated Smart Contract';
-    let description = '';
-
-    if (typeof aiData === 'string') {
-      generatedCode = aiData;
-    } else if (typeof aiData.text === 'string') {
-      generatedCode = aiData.text;
-    } else if (aiData.choices && Array.isArray(aiData.choices) && aiData.choices[0]?.message?.content) {
-      generatedCode = aiData.choices[0].message.content;
-    } else if (aiData.description && typeof aiData.description === 'string') {
-      description = aiData.description;
-      generatedCode = aiData.description;
-      if (aiData.title) title = aiData.title;
-    } else if (aiData && Object.keys(aiData).length > 0) {
-      // Fallback: convert entire response to string
-      generatedCode = JSON.stringify(aiData);
-    }
-
-    // Insert ai_finding with parsed data
-    const { error: findingError } = await supabase
-      .from('ai_findings')
-      .insert({
+    // Insert ai_findings for each vulnerability mitigation
+    if (Array.isArray(mitigations) && mitigations.length > 0) {
+      const findings = mitigations.map((mitigation: any) => ({
         audit_id: audit.id,
         severity: 'info',
-        title: title,
-        description: description || `Generated code:\n\n${generatedCode}`,
+        title: mitigation.name || 'Vulnerability Mitigation',
+        description: mitigation.reason || '',
+        line_start: typeof mitigation.start_line === 'number' ? mitigation.start_line : null,
+        line_end: typeof mitigation.end_line === 'number' ? mitigation.end_line : null,
         status: 'open',
-        reasoning_trace: { ai_response: aiData },
-      });
+        reasoning_trace: { mitigation },
+      }));
 
-    if (findingError) {
-      console.error('Failed to insert ai_finding:', findingError);
-      // Don't fail entirely; continue to update contract
+      const { error: findingError } = await supabase.from('ai_findings').insert(findings);
+      if (findingError) {
+        console.error('Failed to insert ai_findings:', findingError);
+      }
+    } else {
+      const { error: findingError } = await supabase
+        .from('ai_findings')
+        .insert({
+          audit_id: audit.id,
+          severity: 'info',
+          title: 'Generated Smart Contract',
+          description: `Generated code:\n\n${generatedCode}`,
+          status: 'open',
+          reasoning_trace: { ai_response: aiData },
+        });
+
+      if (findingError) {
+        console.error('Failed to insert ai_finding:', findingError);
+      }
     }
 
     // Update contract with generated code as source_code line blocks
