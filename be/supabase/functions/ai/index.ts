@@ -257,7 +257,6 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
           title: 'Generated Smart Contract',
           description: `Generated code:\n\n${generatedCode}`,
           status: 'open',
-          reasoning_trace: { ai_response: aiData },
         });
 
       if (findingError) {
