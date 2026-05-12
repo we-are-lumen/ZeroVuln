@@ -1,5 +1,4 @@
-import { log } from "node:console";
-import { MemData, Indexer } from 'npm:@0glabs/0g-ts-sdk@0.3.3';
+import { ZgFile, Indexer } from 'npm:@0gfoundation/0g-ts-sdk';
 import { ethers } from 'npm:ethers@6.13.0';
 
 const OG_CHAIN_ID = Deno.env.get('OG_CHAIN_ID') || '16602';
@@ -115,37 +114,35 @@ export async function uploadToOgStorage(namespace: string, key: string, content:
     return uploadViaLegacyEndpoint(namespace, key, content);
   }
 
-    const indexer = getStorageIndexer();
-    const wallet = getStorageWallet();
+  const indexer = getStorageIndexer();
+  const wallet = getStorageWallet();
+  const suffix = key.split('.').pop() || 'txt';
+  const tempPath = await Deno.makeTempFile({ prefix: `0g-${namespace}-`, suffix: `.${suffix}` });
 
-    const bytes = new TextEncoder().encode(content);
-    const file = new MemData(bytes);
+  await Deno.writeTextFile(tempPath, content);
 
+  const file = await ZgFile.fromFilePath(tempPath);
+  try {
     const [tree, treeErr] = await file.merkleTree();
-    if (treeErr || !tree) {
-      throw new Error(`Merkle tree error: ${treeErr}`);
-    }
+    if (treeErr !== null) throw new Error(`Merkle tree error: ${treeErr}`);
 
-    const rootHash = tree.rootHash();
-    if (!rootHash) {
-      throw new Error('Merkle tree root hash is empty');
-    }
+    const rootHash = tree?.rootHash();
+    if (!rootHash) throw new Error('Merkle tree root hash is empty');
     console.log('Merkle tree root hash:', rootHash, 'size:', file.size(), 'bytes');
 
-    const [tx, uploadErr] = await indexer.upload(
-      file,
-      OG_RPC_URL,
-      wallet as any,
-    );
+    const [tx, uploadErr] = await indexer.upload(file, OG_RPC_URL, wallet as any);
     if (uploadErr !== null) throw new Error(`Upload error: ${uploadErr}`);
 
     console.log('0G Storage upload success:', rootHash);
 
-    if ("rootHash" in tx) {
+    if (tx && typeof tx === 'object' && 'rootHash' in tx) {
       return { uri: tx.rootHash, hash: tx.txHash };
-    } else {
-      return { uri: tx.rootHashes, hash: tx.txHashes };
     }
+    return { uri: tx.rootHashes, hash: tx.txHashes };
+  } finally {
+    try { await file.close(); } catch { /* ignore */ }
+    await Deno.remove(tempPath).catch(() => undefined);
+  }
 }
 
 export async function fetchFromOgStorage(uri: string): Promise<{ content: string; hash: string }> {
