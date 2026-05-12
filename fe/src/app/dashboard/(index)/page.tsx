@@ -5,7 +5,7 @@ import { Button } from "@/shared/components/ui/button";
 const DashboardPage = () => {
   return (
     <div>
-      <Button variant={"outline"}>nigga</Button>
+      <Button variant={"outline"}>test</Button>
     </div>
   );
 };
