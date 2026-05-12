@@ -18,7 +18,7 @@ const NavItem = ({ href, label }: NavItemProps) => {
     <Link
       href={href}
       className={cn(
-        "border px-4 py-2 text-sm transition-colors hover:text-primary",
+        "rounded-full border px-4 py-2 text-sm transition-colors hover:text-primary",
         isActive
           ? "border-primary bg-primary/10 font-semibold text-primary"
           : "border-transparent text-muted-foreground",

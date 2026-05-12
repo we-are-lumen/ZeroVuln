@@ -9,7 +9,7 @@ export type Contract = {
     name: string
     gas_eslimate: number | null
     reward_per_finding: number
-    source_code: ContractCode
+    source_code: ContractCode[]
     created_at: string
     expired_at: string
 }
