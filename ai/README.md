@@ -147,6 +147,22 @@ Environment penting:
 
 ### Jalankan via Docker
 
+Container sekarang dapat mengunduh model dari Hugging Face repo saat startup. Gunakan `HF_TOKEN` yang valid untuk repo privat atau jika kuota akses diperlukan.
+
+```bash
+cd ai
+docker build -t zerovuln-inference .
+docker run --rm -p 8000:8000 \
+  -e HF_TOKEN="$HF_TOKEN" \
+  -e MODEL_REPO=althof3/zeroVuln \
+  -e MODEL_SUBDIR=ai/merged_model \
+  zerovuln-inference
+```
+
+### Opsi lokal / offline
+
+Jika model sudah tersedia di lokal dan Anda ingin melewati unduhan runtime, pasang volume folder model:
+
 ```bash
 cd ai
 docker build -t zerovuln-inference .
@@ -156,17 +172,7 @@ docker run --rm -p 8000:8000 \
   zerovuln-inference
 ```
 
-### Jalankan via Docker (model di-embed ke image)
-
-Ini akan meng-copy folder `./merged_model` ke dalam image saat build (image jadi besar).
-
-```bash
-cd ai
-python load_lora.py
-
-docker build --target with-model -t zerovuln-inference-with-model .
-docker run --rm -p 8000:8000 zerovuln-inference-with-model
-```
+> Jika `MODEL_PATH` sudah berisi file model, entrypoint tidak akan mengunduh ulang dari Hugging Face.
 
 ## 5. Pull dataset dari 0G Storage (root hash dari Postgres Supabase)
 
