@@ -16,7 +16,6 @@ FROM base AS runtime
 
 # HF model loaded directly via transformers at runtime
 ENV MODEL_REPO=althof3/zeroVuln
-ENV MODEL_SUBDIR=ai/merged_model
 
 EXPOSE 8000
 

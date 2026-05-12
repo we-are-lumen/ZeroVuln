@@ -24,7 +24,6 @@ docker build -t zerovuln-inference .
 docker run --rm -p 8000:8000 \
   -e HF_TOKEN="$HF_TOKEN" \
   -e MODEL_REPO=althof3/zeroVuln \
-  -e MODEL_SUBDIR=ai/merged_model \
   zerovuln-inference
 ```
 

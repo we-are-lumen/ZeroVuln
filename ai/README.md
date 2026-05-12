@@ -135,12 +135,11 @@ curl -s http://localhost:8000/health
 
 curl -s http://localhost:8000/generate \
   -H 'content-type: application/json' \
-  -d '{"prompt":"Write a contract that interacts with non-standard ERC20 tokens like USDT"}'
+  -d '{"prompt":"Write a contract that interacts with non-standard ERC20 tokens like USDT", "system_prompt": "Generate a secure Solidity smart contract that is safe from the specified vulnerability."}'
 ```
 
 Environment penting:
 
-- `MODEL_PATH` (default `./merged_model` di lokal, `/app/merged_model` di Docker)
 - `DEVICE_MAP` (default `auto`)
 - `TORCH_DTYPE` (`bf16`, `fp16`, `fp32`)
 - `SYSTEM_PROMPT` (default sama seperti `run_inference.py`)
@@ -155,7 +154,6 @@ docker build -t zerovuln-inference .
 docker run --rm -p 8000:8000 \
   -e HF_TOKEN="$HF_TOKEN" \
   -e MODEL_REPO=althof3/zeroVuln \
-  -e MODEL_SUBDIR=ai/merged_model \
   zerovuln-inference
 ```
 
