@@ -45,6 +45,15 @@ import { AUDITOR_FINDING_QUERY_KEY } from "../../hooks/use-query-auditor-finding
 import { useQueryClient } from "@tanstack/react-query";
 import { Spinner } from "@/shared/components/ui/spinner";
 import CodeSkeleton from "../skeletons/code-skeleton";
+import {
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/shared/components/ui/alert-dialog";
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -64,6 +73,8 @@ const EditorSection = () => {
   const queryClient = useQueryClient();
   const selectedScId = searchParams.get("selected_sc");
 
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [tempValues, setTempValues] = useState<FormValues | null>(null);
   const [selection, setSelection] = useState<LineSelection | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
 
@@ -85,6 +96,11 @@ const EditorSection = () => {
     if (!data?.source_code) return "";
     return data.source_code.map((lineObj) => lineObj.code).join("\n");
   }, [data?.source_code]);
+
+  const onFormSubmit = (values: FormValues) => {
+    setTempValues(values);
+    setIsConfirmOpen(true);
+  };
 
   const handleMouseUp = () => {
     const selectionObj = window.getSelection();
@@ -108,14 +124,14 @@ const EditorSection = () => {
     }
   };
 
-  const onFormSubmit = (values: FormValues) => {
-    if (!selection) return;
+  const handleFinalConfirm = () => {
+    if (!selection || !tempValues) return;
 
     const payload: AddAuditorFindingPayload = {
       contract_id: selectedScId ?? "",
-      description: values.description,
-      title: values.title,
-      severity: values.severity as AuditorFindingSeverity,
+      description: tempValues.description,
+      title: tempValues.title,
+      severity: tempValues.severity as AuditorFindingSeverity,
       line_start: selection?.start,
       line_end: selection?.end,
     };
@@ -126,11 +142,12 @@ const EditorSection = () => {
           queryKey: [AUDITOR_FINDING_QUERY_KEY],
         });
         toast.success("Security finding saved successfully");
-        setIsDialogOpen(false);
+        setIsConfirmOpen(false); // Close confirmation
+        setIsDialogOpen(false); // Close form
         setSelection(null);
+        setTempValues(null);
         form.reset();
       },
-
       onError: (error: Error) => {
         toast.error(`Failed to save finding: ${error.message}`);
       },
@@ -334,6 +351,64 @@ const EditorSection = () => {
           </form>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Review Security Finding</AlertDialogTitle>
+            <AlertDialogDescription className="space-y-4 pt-4">
+              <div className="rounded-lg border border-mist-800 bg-mist-950/50 p-4">
+                <div className="flex flex-col gap-2">
+                  <div className="text-xs font-bold text-mist-500 uppercase">
+                    Title
+                  </div>
+                  <div className="text-sm text-white">{tempValues?.title}</div>
+                </div>
+                <div className="mt-4 flex justify-between">
+                  <div>
+                    <div className="text-xs font-bold text-mist-500 uppercase">
+                      Severity
+                    </div>
+                    <div
+                      className={cn(
+                        "text-sm font-bold capitalize",
+                        tempValues?.severity === "critical"
+                          ? "text-rose-500"
+                          : "text-primary",
+                      )}
+                    >
+                      {tempValues?.severity}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-xs font-bold text-mist-500 uppercase">
+                      Lines
+                    </div>
+                    <div className="text-sm text-white">
+                      {selection?.start} - {selection?.end}
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="text-sm">
+                Are you sure you want to save this finding to the audit report?
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <Button variant={"outline"} onClick={() => setIsConfirmOpen(false)}>
+              Back to Edit
+            </Button>
+            <Button
+              onClick={handleFinalConfirm}
+              disabled={isAddAuditorFindingPending}
+            >
+              {isAddAuditorFindingPending && <Spinner />}
+              <span>Confirm & Save</span>
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </section>
   );
 };
