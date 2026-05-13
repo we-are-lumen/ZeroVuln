@@ -8,13 +8,21 @@ import { useSearchParams } from "next/navigation";
 import useQueryContractCatalogDetail from "../../hooks/use-query-contract-catalog-detail";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { darcula } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useMemo } from "react";
 
 const FindingsSection = () => {
   const searchParams = useSearchParams();
   const selectedScId = searchParams.get("selected_sc");
 
   const { data: code } = useQueryContractCatalogDetail(selectedScId ?? "");
-  const { data: findings } = useQueryAuditorFinding();
+  const { data: findings, isLoading: isQueryFindingsLoading } =
+    useQueryAuditorFinding();
+
+  const filteredFindings = useMemo(() => {
+    if (!findings) return [];
+
+    return findings?.filter(({ contracts }) => contracts.uuid === selectedScId);
+  }, [findings, selectedScId]);
 
   const getVulnerableSnippet = (start: number, end: number | null) => {
     if (!code?.source_code) return "";
@@ -57,7 +65,7 @@ const FindingsSection = () => {
   };
 
   const renderCards = () =>
-    findings?.map(
+    filteredFindings.map(
       ({
         uuid,
         title,
@@ -74,7 +82,7 @@ const FindingsSection = () => {
           <div
             key={uuid}
             className={cn(
-              "space-y-3 rounded-md border p-3",
+              "space-y-3 rounded-lg border p-3",
               getCardClassNames(severity),
             )}
           >
@@ -134,13 +142,32 @@ const FindingsSection = () => {
       },
     );
 
+  const renderSkeleton = () => (
+    <div className="space-y-2">
+      {[...Array(5)].map((_, index) => (
+        <div
+          key={index}
+          className="h-32 w-full animate-pulse rounded-lg bg-mist-800"
+        ></div>
+      ))}
+    </div>
+  );
+
   return (
-    <section className="flex h-full basis-[25%] flex-col rounded-lg border bg-mist-900/50 backdrop-blur-sm">
+    <section className="flex h-full grow-0 basis-[30%] flex-col rounded-2xl border bg-mist-900/50 backdrop-blur-sm">
       <div className="border-b px-6 py-3">
         <h3 className="text-sm font-bold text-mist-400">FINDINGS</h3>
       </div>
-      <div className="grow space-y-4 overflow-y-auto p-4">
-        {!selectedScId ? (
+      <div className="grow space-y-4 overflow-y-auto p-6">
+        {filteredFindings.length === 0 && (
+          <div className="flex size-full items-center justify-center">
+            <p className="py-10 text-center text-xs text-zinc-500 italic">
+              No findings yet for this contract
+            </p>
+          </div>
+        )}
+        {isQueryFindingsLoading && renderSkeleton()}
+        {!selectedScId && !isQueryFindingsLoading ? (
           <p className="py-10 text-center text-xs text-zinc-500 italic">
             Select a contract to see associated findings
           </p>
