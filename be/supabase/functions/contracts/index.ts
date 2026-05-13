@@ -8,8 +8,8 @@ Deno.serve(async (req: Request) => {
 
   const url = new URL(req.url);
   const pathParts = url.pathname.split('/').filter(Boolean);
-  const functionIndex = pathParts.indexOf('functions');
-  const id = functionIndex !== -1 && pathParts.length > functionIndex + 3 ? pathParts[functionIndex + 3] : null;
+  const functionIndex = pathParts.indexOf('contracts');
+  const id = functionIndex !== -1 && pathParts.length > functionIndex + 1 ? pathParts[functionIndex + 1] : null;
 
   if (req.method === 'GET' && !id) {
     return handleListContracts(auth);

@@ -1,0 +1,21 @@
+{
+  "name": "zerovuln-scripts",
+  "version": "1.0.0",
+  "description": "Standalone CLI scripts (separate from Supabase Edge Functions runtime)",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "pull-datasets": "tsx pull-datasets-from-0g.ts",
+    "pull-and-fine-tune": "tsx pull-datasets-from-0g.ts --fine-tune"
+  },
+  "dependencies": {
+    "@0gfoundation/0g-storage-ts-sdk": "^1.2.9",
+    "@supabase/supabase-js": "^2.105.4",
+    "dotenv": "^17.4.2",
+    "ethers": "^6.13.1"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0"
+  }
+}
