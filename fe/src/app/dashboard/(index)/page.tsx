@@ -10,6 +10,8 @@ import Link from "next/link";
 
 const DashboardPage = () => {
   const { data, isLoading, isError, error } = useQueryContract();
+  const errorMessage =
+    error instanceof Error ? error.message : error ? String(error) : "Unknown error";
 
   const renderCards = () =>
     data?.map(
@@ -64,7 +66,7 @@ const DashboardPage = () => {
         <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm">
           <p className="font-semibold">Gagal mengambil data dari backend.</p>
           <p className="mt-1 break-words text-mist-500">
-            {(error as any)?.message ?? "Unknown error"}
+            {errorMessage}
           </p>
           <p className="mt-2 text-mist-500">
             Cek apakah <code>NEXT_PUBLIC_API_BASE_URL</code> &{" "}

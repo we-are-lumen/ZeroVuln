@@ -3,16 +3,13 @@
 import { Button } from "@/shared/components/ui/button";
 import { ensureOgGalileoChain } from "@/shared/lib/wallet/og-galileo";
 import { api } from "@/api/client";
+import type { Eip1193Provider } from "@/shared/types/eip1193.type";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 
-type Eip1193Provider = {
-  request: (args: { method: string; params?: unknown[] | object }) => Promise<any>;
-};
-
 function getEthereum(): Eip1193Provider | undefined {
   if (typeof window === "undefined") return undefined;
-  return (window as any).ethereum as Eip1193Provider | undefined;
+  return window.ethereum;
 }
 
 export default function Home() {
@@ -40,7 +37,7 @@ export default function Home() {
       setIsConnecting(true);
       const accounts = (await ethereum.request({
         method: "eth_requestAccounts",
-      })) as string[];
+      })) as unknown as string[];
 
       await ensureOgGalileoChain(ethereum);
 
@@ -53,7 +50,7 @@ export default function Home() {
       // (BE akan memanggil resolveUser() saat endpoint /me dipanggil).
       try {
         await api.get("me").json();
-      } catch (e: any) {
+      } catch (e: unknown) {
         console.error(e);
         localStorage.removeItem("walletAddress");
         alert(
@@ -63,9 +60,10 @@ export default function Home() {
       }
 
       router.push("/dashboard");
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error(err);
-      alert(err?.message ?? "Gagal connect wallet.");
+      const message = err instanceof Error ? err.message : "Gagal connect wallet.";
+      alert(message);
     } finally {
       setIsConnecting(false);
     }
