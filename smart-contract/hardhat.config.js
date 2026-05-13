@@ -1,3 +1,4 @@
+require("dotenv").config();
 require("@nomicfoundation/hardhat-ethers");
 
 const RPC_URL = process.env.RPC_URL || "https://evmrpc-testnet.0g.ai";

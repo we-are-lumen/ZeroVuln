@@ -13,6 +13,8 @@
 
 Output akan mencetak address ZVContract.
 
+Catatan: Hardhat membaca `.env` lewat `dotenv` (lihat `hardhat.config.js`).
+
 ## Lokasi contract
 - `contracts/ZVContract.sol`
 
