@@ -10,7 +10,7 @@ const CodeGenPage = () => {
         <h2 className="text-4xl font-bold tracking-tight text-white uppercase">
           Describe What You Want to Build
         </h2>
-        <p className="max-w-[600px] text-sm text-zinc-500 md:text-base">
+        <p className="max-w-[600px] text-sm text-mist-500 md:text-base">
           Transform natural language into secure Solidity contracts. Grounded in
           our verified template library for maximum reliability.
         </p>
