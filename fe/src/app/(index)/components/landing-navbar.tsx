@@ -1,6 +1,9 @@
-"use client";
-
+import BrandLogo from "@/shared/components/ui/brand-logo";
 import { Button } from "@/shared/components/ui/button";
+import { APP_PATH } from "@/shared/constants/app-path";
+import { Wallet03Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import Link from "next/link";
 import { ensureOgGalileoChain } from "@/shared/lib/wallet/og-galileo";
 import { api } from "@/api/client";
 import type { Eip1193Provider } from "@/shared/types/eip1193.type";
@@ -12,7 +15,7 @@ function getEthereum(): Eip1193Provider | undefined {
   return window.ethereum;
 }
 
-export default function Home() {
+const LandingNavbar = () => {
   const router = useRouter();
   const [isConnecting, setIsConnecting] = useState(false);
 
@@ -22,7 +25,6 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    // Kalau sudah connect, langsung arahkan ke /dashboard
     if (hasWallet) router.replace("/dashboard");
   }, [hasWallet, router]);
 
@@ -46,15 +48,13 @@ export default function Home() {
 
       localStorage.setItem("walletAddress", wallet);
 
-      // Handshake ke backend supaya user langsung ter-upsert di table `users`
-      // (BE akan memanggil resolveUser() saat endpoint /me dipanggil).
       try {
         await api.get("me").json();
       } catch (e: unknown) {
         console.error(e);
         localStorage.removeItem("walletAddress");
         alert(
-          "Connect wallet berhasil, tapi gagal handshake ke backend (/me). Pastikan backend jalan dan env FE sudah benar."
+          "Connect wallet berhasil, tapi gagal handshake ke backend (/me). Pastikan backend jalan dan env FE sudah benar.",
         );
         return;
       }
@@ -62,7 +62,8 @@ export default function Home() {
       router.push("/dashboard");
     } catch (err: unknown) {
       console.error(err);
-      const message = err instanceof Error ? err.message : "Gagal connect wallet.";
+      const message =
+        err instanceof Error ? err.message : "Gagal connect wallet.";
       alert(message);
     } finally {
       setIsConnecting(false);
@@ -70,19 +71,44 @@ export default function Home() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center p-6">
-      <div className="w-full max-w-md rounded-xl border bg-background p-6">
-        <h1 className="text-2xl font-bold">ZeroVuln</h1>
-        <p className="mt-2 text-sm text-mist-500">
-          Connect wallet untuk mulai menggunakan dashboard.
-        </p>
+    <nav className="sticky top-0 z-20 flex items-center justify-between bg-mist-950/80 px-20 py-3 backdrop-blur-md">
+      <Link href={APP_PATH.landing}>
+        <BrandLogo className="text-primary" />
+      </Link>
 
-        <div className="mt-6">
-          <Button className="w-full" onClick={handleConnect} disabled={isConnecting}>
-            {isConnecting ? "Connecting..." : "Connect Wallet"}
-          </Button>
-        </div>
+      <div className="space-x-2 text-mist-400">
+        <Link
+          href="/"
+          className="px-4 py-2 transition-all duration-300 hover:text-white"
+        >
+          Benefits
+        </Link>
+        <Link
+          href="/"
+          className="px-4 py-2 transition-all duration-300 hover:text-white"
+        >
+          Specifications
+        </Link>
+        <Link
+          href="/"
+          className="px-4 py-2 transition-all duration-300 hover:text-white"
+        >
+          How-to
+        </Link>
+        <Link
+          href="/"
+          className="px-4 py-2 transition-all duration-300 hover:text-white"
+        >
+          Contact Us
+        </Link>
       </div>
-    </main>
+
+      <Button onClick={handleConnect} disabled={isConnecting}>
+        <HugeiconsIcon icon={Wallet03Icon} strokeWidth={2} size={24} />
+        Connect Wallet
+      </Button>
+    </nav>
   );
-}
+};
+
+export default LandingNavbar;
