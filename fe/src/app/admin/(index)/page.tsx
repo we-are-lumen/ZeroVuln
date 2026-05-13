@@ -153,10 +153,10 @@ const AdminDashboardPage = () => {
               <TableRow>
                 <TableCell
                   colSpan={7}
-                  className="h-24 text-center text-muted-foreground"
+                  className="h-24 text-center text-muted-foreground italic"
                 >
-                  <div className="flex h-32 flex-col items-center justify-center gap-2">
-                    <HugeiconsIcon icon={PackageOpenIcon} />
+                  <div className="flex h-32 flex-col items-center justify-center gap-4">
+                    <HugeiconsIcon icon={PackageOpenIcon} size={44} />
                     <p>No findings found</p>
                   </div>
                 </TableCell>

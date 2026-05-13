@@ -22,7 +22,12 @@ import {
 } from "@/shared/components/ui/select";
 import { Textarea } from "@/shared/components/ui/textarea";
 import { cn } from "@/shared/lib/utils";
-import { Add01Icon, CopyIcon, Rotate01Icon } from "@hugeicons/core-free-icons";
+import {
+  Add01Icon,
+  CopyIcon,
+  Rotate01Icon,
+  ThirdBracketIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useSearchParams } from "next/navigation";
 import { useMemo, useState } from "react";
@@ -188,10 +193,11 @@ const EditorSection = () => {
 
       <div onMouseUp={handleMouseUp} className="relative grow overflow-auto">
         {!selectedScId ? (
-          <div className="flex h-full items-center justify-center text-zinc-500">
-            <p className="text-sm italic">
-              Select a contract to view source code
-            </p>
+          <div className="flex h-full items-center justify-center text-mist-500">
+            <div className="flex flex-col items-center justify-center gap-4 text-sm italic">
+              <HugeiconsIcon icon={ThirdBracketIcon} size={44} />
+              <p>Select a contract to view source code</p>
+            </div>
           </div>
         ) : isLoading ? (
           <CodeSkeleton />

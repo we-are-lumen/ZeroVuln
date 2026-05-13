@@ -9,6 +9,8 @@ import useQueryContractCatalogDetail from "../../hooks/use-query-contract-catalo
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { darcula } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { useMemo } from "react";
+import { PackageOpenIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 
 const FindingsSection = () => {
   const searchParams = useSearchParams();
@@ -160,15 +162,16 @@ const FindingsSection = () => {
       </div>
       <div className="grow space-y-4 overflow-y-auto p-6">
         {filteredFindings.length === 0 && !isQueryFindingsLoading && (
-          <div className="flex size-full items-center justify-center">
-            <p className="py-10 text-center text-xs text-zinc-500 italic">
+          <div className="flex size-full flex-col items-center justify-center gap-4 text-mist-500">
+            <HugeiconsIcon icon={PackageOpenIcon} size={44} />
+            <p className="text-center text-xs italic">
               No findings yet for this contract
             </p>
           </div>
         )}
         {isQueryFindingsLoading && renderSkeleton()}
         {!selectedScId && !isQueryFindingsLoading ? (
-          <p className="py-10 text-center text-xs text-zinc-500 italic">
+          <p className="py-10 text-center text-xs text-mist-500 italic">
             Select a contract to see associated findings
           </p>
         ) : (

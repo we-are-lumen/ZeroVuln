@@ -8,7 +8,7 @@ import { cn } from "@/shared/lib/utils";
 import formatRelativeTime from "@/shared/lib/helpers/formatRelativeTime";
 
 const CatalogSection = () => {
-  const { data } = useQueryContractCatalog();
+  const { data, isLoading } = useQueryContractCatalog();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -84,12 +84,23 @@ const CatalogSection = () => {
       },
     );
 
+  const renderSkeleton = () =>
+    [...Array(5)].map((_, index) => (
+      <div
+        key={index}
+        className="h-32 w-full animate-pulse rounded-lg bg-mist-800"
+      ></div>
+    ));
+
   return (
-    <section className="h-full basis-[20%] rounded-2xl border bg-mist-900/50">
+    <section className="flex h-full basis-[20%] flex-col rounded-2xl border bg-mist-900/50">
       <div className="border-b px-6 py-3">
         <h3 className="text-sm font-bold text-mist-400">CATALOG</h3>
       </div>
-      <div className="grow space-y-3 overflow-y-auto p-6">{renderCards()}</div>
+      <div className="grow space-y-3 overflow-y-auto p-6">
+        {isLoading && renderSkeleton()}
+        {!isLoading && renderCards()}
+      </div>
     </section>
   );
 };
