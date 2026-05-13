@@ -39,12 +39,32 @@ const getSeverityBadgeClass = (severity: string) => {
 const ProfilePage = () => {
   const { data, isLoading, isError, error } = useQueryMeProfile();
 
+  const findings = data?.auditor_findings ?? [];
+  const totalFindings = findings.length;
+  const totalReward = findings.reduce((sum, f) => sum + (f.reward_amount ?? 0), 0);
+
+  const statusCount = findings.reduce<Record<string, number>>((acc, f) => {
+    const key = (f.review_status || "unknown").toLowerCase();
+    acc[key] = (acc[key] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const latestFindings = [...findings]
+    .sort((a, b) => {
+      const at = new Date(a.submitted_at ?? a.created_at).getTime();
+      const bt = new Date(b.submitted_at ?? b.created_at).getTime();
+      return bt - at;
+    })
+    .slice(0, 10);
+
   return (
     <main className="flex h-full flex-col space-y-6 p-6">
       <div className="flex items-center justify-between border-b pb-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
-          <p className="text-sm text-mist-500">Ringkasan akun dan submission kamu.</p>
+          <p className="text-sm text-mist-500">
+            Ringkasan akun dan kontribusi kamu.
+          </p>
         </div>
       </div>
 
@@ -62,70 +82,107 @@ const ProfilePage = () => {
           Data profile tidak ditemukan.
         </div>
       ) : (
-        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-          <Card className="border bg-mist-900/50 backdrop-blur-sm">
-            <CardHeader className="border-b">
-              <CardTitle>Account</CardTitle>
-              <CardDescription>Info dasar user dari endpoint /me/profile.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-mist-400">Wallet</span>
-                <span className="font-medium">{truncateWallet(data.wallet_address)}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-mist-400">UUID</span>
-                <span className="font-mono text-xs">{data.uuid}</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-mist-400">Role</span>
-                <Badge
-                  variant="outline"
-                  className={cn(
-                    "capitalize",
-                    data.is_admin
-                      ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
-                      : "border-mist-600 bg-mist-800/40 text-mist-200",
-                  )}
-                >
-                  {data.is_admin ? "admin" : "user"}
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-mist-400">Created</span>
-                <span className="text-xs text-mist-200">
-                  {formatRelativeTime(data.created_at)}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-mist-400">Updated</span>
-                <span className="text-xs text-mist-200">
-                  {formatRelativeTime(data.updated_at)}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="space-y-6">
+          <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+            <Card className="border bg-mist-900/50 backdrop-blur-sm">
+              <CardHeader className="border-b">
+                <CardTitle>Account</CardTitle>
+                <CardDescription>Informasi akun kamu.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-xs text-mist-400">Wallet address</span>
+                  <span className="font-mono text-xs">
+                    {data.wallet_address || "-"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-mist-400">Role</span>
+                  <Badge
+                    variant="outline"
+                    className={cn(
+                      "capitalize",
+                      data.is_admin
+                        ? "border-emerald-500 bg-emerald-500/10 text-emerald-500"
+                        : "border-mist-600 bg-mist-800/40 text-mist-200",
+                    )}
+                  >
+                    {data.is_admin ? "admin" : "user"}
+                  </Badge>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-mist-400">Account age</span>
+                  <span className="text-xs text-mist-200">
+                    {formatRelativeTime(data.created_at)} yang lalu
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-mist-400">Wallet (short)</span>
+                  <span className="text-xs text-mist-200">
+                    {truncateWallet(data.wallet_address)}
+                  </span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="border bg-mist-900/50 backdrop-blur-sm">
+              <CardHeader className="border-b">
+                <CardTitle>Contributions</CardTitle>
+                <CardDescription>
+                  Ringkasan kontribusi finding kamu.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="rounded-lg border border-mist-800 bg-mist-950/40 p-3">
+                    <p className="text-xs text-mist-400">Total findings</p>
+                    <p className="text-xl font-bold">{totalFindings}</p>
+                  </div>
+                  <div className="rounded-lg border border-mist-800 bg-mist-950/40 p-3">
+                    <p className="text-xs text-mist-400">Total reward</p>
+                    <p className="text-xl font-bold tabular-nums">
+                      {totalReward.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {Object.entries(statusCount)
+                    .sort((a, b) => b[1] - a[1])
+                    .map(([status, count]) => (
+                      <Badge
+                        key={status}
+                        variant="outline"
+                        className="capitalize"
+                      >
+                        {status}: {count}
+                      </Badge>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
           <Card className="border bg-mist-900/50 backdrop-blur-sm">
             <CardHeader className="border-b">
-              <CardTitle>My Findings</CardTitle>
+              <CardTitle>Aktivitas terbaru</CardTitle>
               <CardDescription>
-                Daftar temuan (auditor_findings) yang ter-link ke akun kamu.
+                Menampilkan {latestFindings.length} temuan terbaru.
               </CardDescription>
             </CardHeader>
             <CardContent>
               <Table>
                 <TableHeader>
                   <TableRow className="border-mist-800 hover:bg-transparent">
-                    <TableHead className="w-[320px]">Finding</TableHead>
+                    <TableHead>Finding</TableHead>
                     <TableHead>Severity</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Reward</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data.auditor_findings?.length ? (
-                    data.auditor_findings.map((f) => (
+                  {latestFindings.length ? (
+                    latestFindings.map((f) => (
                       <TableRow
                         key={f.uuid}
                         className="border-b border-mist-800 transition-colors hover:bg-white/5"
@@ -136,14 +193,11 @@ const ProfilePage = () => {
                               {f.title}
                             </span>
                             <span className="text-[10px] text-mist-400">
-                              Contract ID: {f.contract_id ?? "-"} · Lines:{" "}
-                              {f.line_start ?? "-"} - {f.line_end ?? "-"}
+                              Contract ID: {f.contract_id ?? "-"} ·{" "}
+                              {f.submitted_at
+                                ? `Dikirim ${formatRelativeTime(f.submitted_at)} yang lalu`
+                                : `Dibuat ${formatRelativeTime(f.created_at)} yang lalu`}
                             </span>
-                            {f.submitted_at ? (
-                              <span className="text-[10px] text-mist-500">
-                                Dikirim {formatRelativeTime(f.submitted_at)} yang lalu
-                              </span>
-                            ) : null}
                           </div>
                         </TableCell>
                         <TableCell className="align-top">
@@ -166,7 +220,7 @@ const ProfilePage = () => {
                           </Badge>
                         </TableCell>
                         <TableCell className="align-top text-right tabular-nums">
-                          {f.reward_amount ?? "-"}
+                          {(f.reward_amount ?? 0) ? f.reward_amount?.toLocaleString() : "-"}
                         </TableCell>
                       </TableRow>
                     ))
