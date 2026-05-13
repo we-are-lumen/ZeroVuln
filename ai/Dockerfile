@@ -6,7 +6,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 RUN apt-get update \
- && apt-get install -y --no-install-recommends nginx supervisor openssl \
+ && apt-get install -y --no-install-recommends nginx supervisor \
  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
@@ -24,7 +24,7 @@ COPY --from=base /app/inference_app /app/inference_app
 RUN cp /app/inference_app/nginx.conf /etc/nginx/nginx.conf \
  && cp /app/inference_app/supervisord.conf /etc/supervisor/supervisord.conf \
  && mkdir -p /etc/nginx/certs /var/log/nginx \
- && chmod +x /app/inference_app/entrypoint.sh /app/inference_app/gen-cert.sh
+ && chmod +x /app/inference_app/entrypoint.sh
 
 EXPOSE 80 443
 
