@@ -1,9 +1,21 @@
+"use client";
+
 import { Button } from "@/shared/components/ui/button";
 import { Textarea } from "@/shared/components/ui/textarea";
+import { APP_PATH } from "@/shared/constants/app-path";
 import { SparklesIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 const CodeGenPage = () => {
+  const router = useRouter();
+
+  const handleGenerate = () => {
+    // !TODO Call generate API
+    toast.success("AI Generation complete");
+    router.push(APP_PATH.dashboard.codeGen + "/1");
+  };
   return (
     <main className="-mt-20 flex h-screen w-full flex-col items-center justify-center gap-5 p-6">
       <div className="mb-8 flex flex-col items-center space-y-2 text-center">
@@ -22,7 +34,7 @@ const CodeGenPage = () => {
           placeholder="Type your prompt here"
         />
         <div className="flex justify-end">
-          <Button>
+          <Button onClick={handleGenerate}>
             <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} size={18} />
             Generate
           </Button>

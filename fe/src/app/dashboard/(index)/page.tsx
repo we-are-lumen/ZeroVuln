@@ -49,6 +49,14 @@ const DashboardPage = () => {
       ),
     );
 
+  const renderSkeleton = () =>
+    [...Array(8)].map((_, index) => (
+      <div
+        key={index}
+        className="h-44 w-full animate-pulse rounded-lg bg-mist-800"
+      ></div>
+    ));
+
   return (
     <main className="p-6">
       <div className="mb-6 border-b pb-3">
@@ -58,39 +66,10 @@ const DashboardPage = () => {
           gas optimization metrics.
         </p>
       </div>
-      {isLoading ? (
-        <div className="text-sm text-mist-500">Loading contracts...</div>
-      ) : isError ? (
-        <div className="rounded-lg border border-destructive/50 bg-destructive/10 p-4 text-sm">
-          <p className="font-semibold">Gagal mengambil data dari backend.</p>
-          <p className="mt-1 break-words text-mist-500">
-            {(error as any)?.message ?? "Unknown error"}
-          </p>
-          <p className="mt-2 text-mist-500">
-            Cek apakah <code>NEXT_PUBLIC_API_BASE_URL</code> &{" "}
-            <code>NEXT_PUBLIC_BEARER_TOKEN</code> sudah benar dan backend sedang
-            jalan.
-          </p>
-        </div>
-      ) : !data?.length ? (
-        <div className="rounded-lg border bg-mist-900/30 p-6">
-          <p className="font-semibold">Belum ada contract untuk wallet ini.</p>
-          <p className="mt-1 text-sm text-mist-500">
-            Coba buat contract dulu lewat menu <span className="font-medium">Code Gen</span> atau{" "}
-            <span className="font-medium">Audit</span>.
-          </p>
-          <div className="mt-4 flex gap-2">
-            <Button asChild variant="outline">
-              <Link href="/dashboard/code-gen">Ke Code Gen</Link>
-            </Button>
-            <Button asChild variant="outline">
-              <Link href="/dashboard/audit">Ke Audit</Link>
-            </Button>
-          </div>
-        </div>
-      ) : (
-        <section className="grid grid-cols-4 gap-3">{renderCards()}</section>
-      )}
+      <section className="grid grid-cols-4 gap-3">
+        {isLoading && renderSkeleton()}
+        {!isLoading && renderCards()}
+      </section>
     </main>
   );
 };
