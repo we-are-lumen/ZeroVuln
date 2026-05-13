@@ -1,4 +1,5 @@
 import DashboardNavbar from "./(index)/components/dashboard-navbar";
+import WalletGuard from "@/shared/components/auth/wallet-guard";
 
 const DashboardLayout = ({
   children,
@@ -6,10 +7,12 @@ const DashboardLayout = ({
   children: React.ReactNode;
 }>) => {
   return (
-    <div className="flex h-screen flex-col">
-      <DashboardNavbar />
-      <div className="grow overflow-y-auto">{children}</div>
-    </div>
+    <WalletGuard>
+      <div className="flex h-screen flex-col">
+        <DashboardNavbar />
+        <div className="grow overflow-y-auto">{children}</div>
+      </div>
+    </WalletGuard>
   );
 };
 
