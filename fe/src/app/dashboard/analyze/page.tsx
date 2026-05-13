@@ -53,20 +53,22 @@ const AnalyzePage = () => {
 
     try {
       await toast.promise(payForFeature("Analyze", `analyze:${Date.now()}`), {
-        loading: "Memproses pembayaran 0.1 0g...",
-        success: () => "Pembayaran berhasil.",
+        loading: "Processing payment of 0.1 0g...",
+        success: () => "Payment sucessful",
         error: (err: unknown) =>
-          err instanceof Error ? err.message : "Pembayaran gagal.",
+          err instanceof Error ? err.message : "Payment failed",
       });
 
       await toast.promise(analyze({ code }), {
-        loading: "Menganalisis smart contract...",
+        loading: "Analyzing smart contract...",
         success: (data) => {
-          router.push(`${APP_PATH.dashboard.codeGen}/${data.contract_id}`);
-          return "Analisis selesai.";
+          router.push(`${APP_PATH.dashboard.analyze}/${data.contract_id}`);
+          return "Analysis complete";
         },
         error: (err: unknown) =>
-          err instanceof Error ? err.message : "Gagal analyze smart contract.",
+          err instanceof Error
+            ? err.message
+            : "Failed analyzing smart contract",
       });
     } catch {
       // toast sudah handle
@@ -126,7 +128,7 @@ const AnalyzePage = () => {
               <span>Upload File</span>
             </Button>
 
-            <Button onClick={handleAnalyze}>
+            <Button onClick={handleAnalyze} disabled={isPending}>
               <HugeiconsIcon
                 icon={ShieldBlockchainIcon}
                 size={24}

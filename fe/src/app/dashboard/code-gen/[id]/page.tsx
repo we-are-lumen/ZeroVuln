@@ -28,7 +28,7 @@ const CodeGenResultPage = () => {
           </BreadcrumbItem>
         </BreadcrumbList>
       </Breadcrumb>
-      <main className="flex grow gap-3">
+      <main className="flex grow gap-3 overflow-y-auto">
         <EditorSection />
         <AiFindingsSection />
       </main>
