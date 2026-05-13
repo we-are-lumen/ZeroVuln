@@ -1,21 +1,21 @@
 "use client";
 
-import Image from "next/image";
-import LandingNavbar from "./components/landing-navbar";
-import { Textarea } from "@/shared/components/ui/textarea";
+import BrandLogo from "@/shared/components/ui/brand-logo";
 import { Button } from "@/shared/components/ui/button";
-import { HugeiconsIcon, IconSvgElement } from "@hugeicons/react";
+import { Textarea } from "@/shared/components/ui/textarea";
 import {
   CheckmarkCircle04Icon,
   CreditCardPosIcon,
   DiscordIcon,
   GithubIcon,
   Orbit01Icon,
-  ShieldBlockchainIcon,
+  SparklesIcon,
   TwitterIcon,
   Upload01Icon,
 } from "@hugeicons/core-free-icons";
-import BrandLogo from "@/shared/components/ui/brand-logo";
+import { HugeiconsIcon, IconSvgElement } from "@hugeicons/react";
+import Image from "next/image";
+import LandingNavbar from "./components/landing-navbar";
 
 export default function Home() {
   return (
@@ -56,16 +56,12 @@ export default function Home() {
               className="gap-2 text-mist-400 hover:text-white"
             >
               <HugeiconsIcon icon={Upload01Icon} size={18} fontWeight={2} />
-              <span>Upload File</span>
+              <span>Upload FilOe</span>
             </Button>
 
             <Button>
-              <HugeiconsIcon
-                icon={ShieldBlockchainIcon}
-                size={24}
-                strokeWidth={2}
-              />
-              Analyze
+              <HugeiconsIcon icon={SparklesIcon} size={24} strokeWidth={2} />
+              Generate Contract
             </Button>
           </div>
         </div>
