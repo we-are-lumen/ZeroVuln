@@ -2,8 +2,8 @@ import { resolveUser, unauthorized, notFound, badRequest, serverError, json, sup
 import { submitComputeJob } from '../_shared/og-storage.ts';
 
 // constant AI System Prompt
-const AI_CODEGEN_SYSTEM_PROMPT = "Target: Lead Blockchain Security Architect & Smart Contract Auditor. Role: Your mission is to generate high-security, production-ready Solidity smart contracts. You must implement advanced mitigations for a comprehensive range of vulnerabilities. Operational Rules:   1. Standards: Use Solidity ^0.8.20 and OpenZeppelin libraries (AccessControl, ReentrancyGuard, SafeERC20). 2. Patterns: Strictly apply \"Checks-Effects-Interactions\" and \"Pull-over-Push\" for payments.  3. Clarity: Use NatSpec for all functions and state variables. CRITICAL WORKFLOW:Step 1: Generate the complete smart contract code with all security measures implemented.Step 2: Analyze YOUR OWN generated code line-by-line to identify every security mitigation.Step 3: For each mitigation, identify the EXACT line numbers where it's implemented in YOUR generated code.Step 4: Extract the actual code snippet from YOUR generated code for each mitigation. \n Output Format: Respond ONLY with a valid JSON object. No conversational text. Ensure that string values are not wrapped in markdown code blocks or backticks. \nJSON Structure: {\"code\": \"string (The complete Solidity source code)\",\"vulnerability_mitigations\": [{\"name\": \"string (The specific vulnerability name)\",\"reason\": \"string (Technical explanation of the defense mechanism applied)\",\"start_line\": number,\"end_line\": number}]}";
-const AI_CODEAUDIT_SYSTEM_PROMPT = "Role: You are a Senior Smart Contract Auditor. Analyze the provided raw Solidity string for vulnerabilities and provide a production-ready fix.Input: A raw UTF-8 string of Solidity code. Protocol: 1. Index: Internally treat the string as a list of lines starting at line 1. 2. Audit: Identify Critical (Reentrancy, Logic), High (Access Control), Medium (Arithmetic, DoS), and Low (Gas, NatSpec) issues. 3. Remediate: Create a `code_fixed` version using OpenZeppelin standards and the Checks-Effects-Interactions (CEI) pattern.\n4. Map: Track exactly which lines in the original code the vulnerabilities and fixes correspond to. Output Rules (STRICT): JSON ONLY. Your entire response must be a single, valid JSON object. NO MARKDOWN WRAPPERS. Do not use `json or ` blocks. Start your response directly with `{` and end with `}`. NO CONVERSATIONAL TEXT. Do not say \"Here is the audit\" or \"I found...\". LINE ACCURACY. `start_line` and `end_line` must match the 1-based index of the input string exactly. VERBATIM FIX. `suggested_code` must be an exact substring/extract from your `code_fixed`. If secure, return: `{\"code_fixed\": \"[original_code]\", \"vulnerabilities\": []}`.\n\nJSON Schema:\n\n```json\n{\"code_fixed\": \"string (The entire corrected and secured source code)\",\"vulnerabilities\": [{ \"name\": \"string\", \"reasoning_trace\": [\"string (Step-by-step PoC referencing line numbers)\"], \"start_line\": number, \"end_line\": number, \"severity\": \"<critical or high or medium or low or info>\", \"confidence\": number (0.0 to 1.0), \"suggested_code\": \"string (verbatim extract from code_fixed)\"}]\n}\n```";
+const AI_CODEGEN_SYSTEM_PROMPT = "Target: Lead Blockchain Security Architect & Smart Contract Auditor.\nRole: Generate high-security Solidity smart contracts and provide a detailed forensic trace of an averted attack.\n\nOperational Rules:\n1. Standards: Solidity ^0.8.20, OpenZeppelin (AccessControl, ReentrancyGuard, SafeERC20).\n2. Patterns: Checks-Effects-Interactions, Pull-over-Push.\n3. Output Requirement: Valid JSON only. Do NOT use markdown code blocks, backticks, or any conversational text.\n\nCRITICAL WORKFLOW:\nStep 1: Generate a production-ready Solidity contract.\nStep 2: Identify specific mitigations within the code (line-by-line).\nStep 3: Simulate a 'Flow Tracing' of a failed hack attempt against this specific implementation.\n\nJSON Structure:\n{\n  \"code\": \"string (Single line string. Use \\n for newlines. Escape all internal quotes)\",\n  \"vulnerability_mitigations\": [\n    {\n      \"name\": \"string\",\n      \"reason\": \"string\",\n      \"start_line\": number,\n      \"end_line\": number\n    }\n  ]\n}\n\nConstraint: The response must be a single, raw JSON object. If you include any text outside the JSON braces, the system will fail.";
+const AI_CODEAUDIT_SYSTEM_PROMPT = "Target: Lead Blockchain Security Architect & Smart Contract Auditor. \nRole: Your mission is to generate high-security, production-ready Solidity smart contracts and simulate attack forensics. \n\nOperational Rules:\n1. Standards: Use Solidity ^0.8.20 and OpenZeppelin libraries (AccessControl, ReentrancyGuard, SafeERC20).\n2. Patterns: Strictly apply \"Checks-Effects-Interactions\" and \"Pull-over-Push\" for payments.\n3. Forensics: You must simulate a hypothetical hack attempt on the generated logic to prove its resilience or demonstrate the attack vector.\n\nCRITICAL WORKFLOW:\nStep 1: Generate the complete Solidity source code with advanced security measures.\nStep 2: Create a \"Hack Flow Trace\" in JSON format that maps the step-by-step execution of a common exploit (e.g., Reentrancy, Flashloan manipulation, or Oracle manipulation) against a vulnerable version of such logic, showing how your current code would mitigate it.\n\nOutput Format: Respond ONLY with a valid JSON object. No conversational text. No markdown blocks.\n\nJSON Structure:\n{\n  \"code\": \"string (The complete Solidity source code)\",\n  \"vulnerability_mitigations\": [\n    {\n      \"name\": \"string\",\n      \"reason\": \"string\",\n      \"start_line\": number,\n      \"end_line\": number\n    }\n  ],\n  \"attack_trace\": {\n    \"traceId\": \"string (hex)\",\n    \"nodes\": [\n      { \"id\": \"string\", \"label\": \"string\", \"type\": \"string\", \"address\": \"string\" }\n    ],\n    \"edges\": [\n      { \"from\": \"string\", \"to\": \"string\", \"action\": \"string\", \"value\": \"string\", \"status\": \"string\" }\n    ],\n    \"metadata\": {\n      \"blockNumber\": number,\n      \"confidence\": number,\n      \"vulnerability\": \"string\"\n    }\n  }\n}";
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPreflight();
@@ -42,12 +42,12 @@ interface AIChatPayload {
   system_prompt: string;
 }
 
-async function aiFetch(_endpoint: string, payload: AIChatPayload): Promise<Response> {
-  const apiUrl = Deno.env.get('AI_API_URL') || 'https://ai.sumopod.com/v1/chat/completions';
+async function aiFetch(payload: AIChatPayload): Promise<Response> {
+  const apiUrl = 'https://ai.sumopod.com/v1/chat/completions';
   const apiKey = Deno.env.get('AI_API_KEY');
-  const model = Deno.env.get('AI_MODEL') || 'qwen3.6-plus';
-  const maxTokens = parseInt(Deno.env.get('AI_MAX_TOKENS') || '1024', 10);
-  const temperature = parseFloat(Deno.env.get('AI_TEMPERATURE') || '0.7');
+  const model = 'gemini/gemini-3.1-flash-lite-preview';
+  const maxTokens =  1024;
+  const temperature = 0.7;
 
   if (!apiKey) throw new Error('AI_API_KEY not configured');
 
@@ -55,17 +55,17 @@ async function aiFetch(_endpoint: string, payload: AIChatPayload): Promise<Respo
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
+      Authorization: `Bearer ${apiKey}`
     },
     body: JSON.stringify({
       model,
       messages: [
         { role: 'system', content: payload.system_prompt },
-        { role: 'user', content: payload.prompt },
+        { role: 'user', content: payload.prompt }
       ],
       max_tokens: maxTokens,
-      temperature,
-    }),
+      temperature
+    })
   });
 }
 
@@ -211,15 +211,18 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
 
   try {
     // Call AI inference endpoint
-    const aiEndpoint = Deno.env.get('AI_INFERENCE_URL') || 'http://localhost:8000';
+    // const aiEndpoint = Deno.env.get('AI_INFERENCE_URL') || 'http://localhost:8000';
     
-    const aiResponse = await aiFetch(aiEndpoint, {
+    const aiResponse = await aiFetch({
       prompt: prompt,
       system_prompt: AI_CODEGEN_SYSTEM_PROMPT,
     });
 
+
+
     if (!aiResponse.ok) {
-      throw new Error(`AI service returned ${aiResponse.status}`);
+      const errBody = await aiResponse.text();                
+      throw new Error(`AI service ${aiResponse.status}: ${errBody}`);
     }
 
     const aiData = await aiResponse.json();
@@ -353,9 +356,9 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
   if (auditError || !audit) return serverError('Failed to create audit record');
 
   try {
-    const aiEndpoint = Deno.env.get('AI_INFERENCE_URL') || 'http://localhost:8000';
+    // const aiEndpoint = Deno.env.get('AI_INFERENCE_URL') || 'http://localhost:8000';
 
-    const aiResponse = await aiFetch(aiEndpoint, {
+    const aiResponse = await aiFetch({
       prompt: code,
       system_prompt: AI_CODEAUDIT_SYSTEM_PROMPT,
     });
@@ -411,6 +414,7 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
       audit_id: audit.uuid,
       code_fixed: parsed.code_fixed,
       findings: inserted,
+      attack_trace: parsed.attack_trace,
     }, 200);
   } catch (e) {
     console.error('Audit job failed:', e);
@@ -438,15 +442,16 @@ interface AuditVulnerability {
   suggested_code?: unknown;
 }
 
-function parseAuditResponse(aiData: unknown): { code_fixed: string; vulnerabilities: AuditVulnerability[] } {
+function parseAuditResponse(aiData: unknown): { code_fixed: string; vulnerabilities: AuditVulnerability[]; attack_trace: unknown } {
   const payload = extractAIContent(aiData);
   if (payload && typeof payload === 'object') {
-    const p = payload as { code_fixed?: unknown; vulnerabilities?: unknown };
+    const p = payload as { code_fixed?: unknown; vulnerabilities?: unknown; attack_trace?: unknown };
     const code_fixed = typeof p.code_fixed === 'string' ? p.code_fixed : '';
     const vulnerabilities = Array.isArray(p.vulnerabilities) ? p.vulnerabilities as AuditVulnerability[] : [];
-    return { code_fixed, vulnerabilities };
+    const attack_trace = p.attack_trace ?? null;
+    return { code_fixed, vulnerabilities, attack_trace };
   }
-  return { code_fixed: '', vulnerabilities: [] };
+  return { code_fixed: '', vulnerabilities: [], attack_trace: null };
 }
 
 async function handleAutoFix(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
