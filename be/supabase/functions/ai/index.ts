@@ -162,49 +162,51 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
     return badRequest('prompt is required');
   }
 
-  // Get user_id from auth (assumes auth is { user_id: number }; convert to UUID via lookup)
-  const { data: user, error: userError } = await supabase
-    .from('users')
-    .select('id')
-    .eq('id', auth.user_id) // If auth.user_id is already UUID, otherwise adjust
-    .single();
-
-  if (userError || !user) return serverError('User not found');
-  const userId = user.id;
-
-  // Create or use existing contract
-  let contractId: string;
+  // Resolve contract: accept uuid from caller, otherwise create a fresh draft.
+  let contractRowId: number;
+  let contractUuid: string;
   if (contract_id && typeof contract_id === 'string') {
-    contractId = contract_id;
+    const { data: existing, error: existingError } = await supabase
+      .from('contracts')
+      .select('id, uuid, owner_id, is_catalog')
+      .eq('uuid', contract_id)
+      .single();
+    if (existingError || !existing) return notFound('Contract not found');
+    if (existing.owner_id !== auth.user_id) return badRequest('Contract does not belong to user');
+    if (existing.is_catalog) return badRequest('Cannot codegen into catalog contract');
+    contractRowId = existing.id;
+    contractUuid = existing.uuid;
   } else {
-    // Create new contract with is_catalog = false
     const { data: newContract, error: contractError } = await supabase
       .from('contracts')
       .insert({
-        owner_id: userId,
+        owner_id: auth.user_id,
         is_catalog: false,
         name: `Generated Contract - ${new Date().toISOString().slice(0, 10)}`,
         language: 'solidity',
         status: 'draft',
+        source_code: [],
       })
-      .select('id')
+      .select('id, uuid')
       .single();
 
     if (contractError || !newContract) {
+      console.error('Failed to create contract:', contractError);
       return serverError('Failed to create contract');
     }
-    contractId = newContract.id;
+    contractRowId = newContract.id;
+    contractUuid = newContract.uuid;
   }
 
   // Create audit record
   const { data: audit, error: auditError } = await supabase
     .from('audits')
     .insert({
-      contract_id: contractId,
+      contract_id: contractRowId,
       kind: 'codegen',
       status: 'pending',
     })
-    .select()
+    .select('id, uuid')
     .single();
 
   if (auditError || !audit) return serverError('Failed to create audit record');
@@ -233,11 +235,11 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
 
     // Insert ai_findings for each vulnerability mitigation
     if (Array.isArray(mitigations) && mitigations.length > 0) {
-      const findings = mitigations.map((mitigation: any) => ({
+      const findings = mitigations.map((mitigation: Record<string, unknown>) => ({
         audit_id: audit.id,
         severity: 'info',
-        title: mitigation.name || 'Vulnerability Mitigation',
-        description: mitigation.reason || '',
+        title: (typeof mitigation.name === 'string' && mitigation.name) || 'Vulnerability Mitigation',
+        description: typeof mitigation.reason === 'string' ? mitigation.reason : '',
         line_start: typeof mitigation.start_line === 'number' ? mitigation.start_line : null,
         line_end: typeof mitigation.end_line === 'number' ? mitigation.end_line : null,
         status: 'open',
@@ -272,51 +274,100 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
         .update({
           source_code: sourceBlocks,
         })
-        .eq('id', contractId);
+        .eq('id', contractRowId);
 
       if (updateError) {
         console.error('Failed to update contract:', updateError);
       }
     }
 
-    return json({ 
-      contract_id: contractId,
-      audit_id: audit.id,
+    await supabase
+      .from('audits')
+      .update({
+        status: 'succeeded',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', audit.id);
+
+    return json({
+      contract_id: contractUuid,
+      audit_id: audit.uuid,
       generated_code: generatedCode,
-      mitigations
+      mitigations,
     }, 200);
   } catch (e) {
     console.error('Codegen job failed:', e);
+    await supabase
+      .from('audits')
+      .update({ status: 'failed' })
+      .eq('id', audit.id);
     return serverError(`Codegen failed: ${String(e)}`);
   }
 }
 
 async function handleAudit(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
-  const { code, prompt } = body;
+  const { code, prompt, contract_id } = body;
 
   if (!code || typeof code !== 'string') {
     return badRequest('code (raw smart contract string) is required');
   }
 
-  // Get user_id from auth
-  const { data: user, error: userError } = await supabase
-    .from('users')
-    .select('id')
-    .eq('id', auth.user_id)
-    .single();
+  // Resolve / create owning contract (cannot be null on auditor_findings; we use ai_findings here).
+  let contractRowId: number;
+  let contractUuid: string;
+  if (contract_id && typeof contract_id === 'string') {
+    const { data: existing, error: existingError } = await supabase
+      .from('contracts')
+      .select('id, uuid, owner_id, is_catalog')
+      .eq('uuid', contract_id)
+      .single();
+    if (existingError || !existing) return notFound('Contract not found');
+    if (existing.owner_id !== auth.user_id) return badRequest('Contract does not belong to user');
+    if (existing.is_catalog) return badRequest('Cannot audit catalog contract via this endpoint');
+    contractRowId = existing.id;
+    contractUuid = existing.uuid;
+  } else {
+    const { data: newContract, error: contractError } = await supabase
+      .from('contracts')
+      .insert({
+        owner_id: auth.user_id,
+        is_catalog: false,
+        name: `Audited Contract - ${new Date().toISOString().slice(0, 10)}`,
+        language: 'solidity',
+        status: 'draft',
+        source_code: codeStringToSourceBlocks(code),
+      })
+      .select('id, uuid')
+      .single();
+    if (contractError || !newContract) {
+      console.error('Failed to create contract:', contractError);
+      return serverError('Failed to create contract');
+    }
+    contractRowId = newContract.id;
+    contractUuid = newContract.uuid;
+  }
 
-  if (userError || !user) return serverError('User not found');
-  const userId = user.id;
+  const { data: audit, error: auditError } = await supabase
+    .from('audits')
+    .insert({
+      contract_id: contractRowId,
+      kind: 'audit',
+      status: 'pending',
+    })
+    .select('id, uuid')
+    .single();
+  if (auditError || !audit) return serverError('Failed to create audit record');
 
   try {
-    // Call AI inference endpoint with the raw code
     const aiEndpoint = Deno.env.get('AI_INFERENCE_URL') || 'http://localhost:8000';
-    const customPrompt = prompt || 'Audit this Solidity contract for security vulnerabilities.';
-    
+    const customPrompt = typeof prompt === 'string' && prompt
+      ? prompt
+      : 'Audit this Solidity contract for security vulnerabilities.';
+
     const aiResponse = await fetch(`${aiEndpoint}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
+      body: JSON.stringify({
         prompt: `${customPrompt}\n\nCode:\n${code}`,
         system_prompt: AI_CODEAUDIT_SYSTEM_PROMPT,
       }),
@@ -327,65 +378,96 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
     }
 
     const aiData = await aiResponse.json();
+    const parsed = parseAuditResponse(aiData);
+    const findings = parsed.vulnerabilities.length > 0
+      ? parsed.vulnerabilities.map((v) => ({
+          audit_id: audit.id,
+          severity: normalizeSeverity(v.severity),
+          title: v.name || 'Security Finding',
+          description: Array.isArray(v.reasoning_trace) ? v.reasoning_trace.join('\n') : '',
+          line_start: typeof v.start_line === 'number' ? v.start_line : null,
+          line_end: typeof v.end_line === 'number' ? v.end_line : null,
+          confidence: typeof v.confidence === 'number' ? v.confidence : null,
+          status: 'open',
+          reasoning_trace: { vulnerability: v },
+          remediation: v.suggested_code ? { suggested_code: v.suggested_code } : null,
+        }))
+      : [{
+          audit_id: audit.id,
+          severity: 'info',
+          title: 'Security Audit Finding',
+          description: typeof aiData === 'string' ? aiData : JSON.stringify(aiData),
+          status: 'open',
+        }];
 
-    // Parse AI response
-    let title = 'Security Audit Finding';
-    let description = '';
-    let severity: string = 'medium';
+    const { data: inserted, error: findingError } = await supabase
+      .from('ai_findings')
+      .insert(findings)
+      .select('uuid, severity, title, description, line_start, line_end, confidence, status');
 
-    if (typeof aiData === 'string') {
-      description = aiData;
-    } else if (typeof aiData.text === 'string') {
-      description = aiData.text;
-    } else if (aiData.choices && Array.isArray(aiData.choices) && aiData.choices[0]?.message?.content) {
-      description = aiData.choices[0].message.content;
-    } else if (aiData.description && typeof aiData.description === 'string') {
-      description = aiData.description;
-      if (aiData.title) title = aiData.title;
-      if (aiData.severity) severity = aiData.severity;
-    } else if (aiData && Object.keys(aiData).length > 0) {
-      description = JSON.stringify(aiData);
+    if (findingError) {
+      console.error('Failed to insert ai_findings:', findingError);
+      throw new Error('Failed to save audit findings');
     }
 
-    // Validate severity
-    const validSeverities = ['critical', 'high', 'medium', 'low', 'info'];
-    if (!validSeverities.includes(severity)) {
-      severity = 'medium';
-    }
-
-    // Insert directly to auditor_findings
-    const { data: finding, error: findingError } = await supabase
-      .from('auditor_findings')
-      .insert({
-        contributor_id: userId,
-        contract_id: null, // No contract_id needed for raw code audit
-        severity: severity,
-        title: title,
-        description: description,
-        review_status: 'draft',
-        code_uri: null,
-        analysis_uri: null,
+    await supabase
+      .from('audits')
+      .update({
+        status: 'succeeded',
+        completed_at: new Date().toISOString(),
+        summary: parsed.code_fixed ? 'Audit completed with suggested fixes' : 'Audit completed',
       })
-      .select('id, uuid')
-      .single();
-
-    if (findingError || !finding) {
-      console.error('Failed to insert auditor_finding:', findingError);
-      return serverError('Failed to save audit finding');
-    }
+      .eq('id', audit.id);
 
     return json({
-      finding_id: finding.id,
-      finding_uuid: finding.uuid,
-      title: title,
-      severity: severity,
-      description: description,
-      ai_response: aiData,
+      contract_id: contractUuid,
+      audit_id: audit.uuid,
+      code_fixed: parsed.code_fixed,
+      findings: inserted,
     }, 200);
   } catch (e) {
     console.error('Audit job failed:', e);
+    await supabase
+      .from('audits')
+      .update({ status: 'failed' })
+      .eq('id', audit.id);
     return serverError(`Audit failed: ${String(e)}`);
   }
+}
+
+function normalizeSeverity(value: unknown): string {
+  const valid = ['critical', 'high', 'medium', 'low', 'info'];
+  if (typeof value === 'string' && valid.includes(value.toLowerCase())) return value.toLowerCase();
+  return 'medium';
+}
+
+interface AuditVulnerability {
+  name?: string;
+  severity?: string;
+  start_line?: number;
+  end_line?: number;
+  confidence?: number;
+  reasoning_trace?: string[];
+  suggested_code?: unknown;
+}
+
+function parseAuditResponse(aiData: unknown): { code_fixed: string; vulnerabilities: AuditVulnerability[] } {
+  let payload: unknown = aiData;
+  if (payload && typeof payload === 'object' && 'response' in payload) {
+    const inner = (payload as { response: unknown }).response;
+    if (typeof inner === 'string') {
+      try { payload = JSON.parse(inner); } catch { payload = inner; }
+    } else {
+      payload = inner;
+    }
+  }
+  if (payload && typeof payload === 'object') {
+    const p = payload as { code_fixed?: unknown; vulnerabilities?: unknown };
+    const code_fixed = typeof p.code_fixed === 'string' ? p.code_fixed : '';
+    const vulnerabilities = Array.isArray(p.vulnerabilities) ? p.vulnerabilities as AuditVulnerability[] : [];
+    return { code_fixed, vulnerabilities };
+  }
+  return { code_fixed: '', vulnerabilities: [] };
 }
 
 async function handleAutoFix(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
@@ -419,7 +501,6 @@ async function handleAutoFix(_req: Request, auth: { user_id: number }, body: Rec
       contract_id: contract.id,
       kind: 'auto_fix',
       status: 'pending',
-      prompt_template: 'auto_fix',
     })
     .select()
     .single();
@@ -485,7 +566,6 @@ async function handleGasOpt(_req: Request, auth: { user_id: number }, body: Reco
       contract_id: contract.id,
       kind: 'gas_opt',
       status: 'pending',
-      prompt_template: 'gas_optimization',
     })
     .select()
     .single();

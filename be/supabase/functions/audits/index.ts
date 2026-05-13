@@ -27,7 +27,7 @@ Deno.serve(async (req: Request) => {
 async function handleListAudits(auth: { user_id: number }, contractId: string | null, status: string | null) {
   let query = supabase
     .from('audits')
-    .select('uuid, status, kind, prompt_template, summary, started_at, completed_at, created_at, updated_at, contracts!inner(uuid, name, owner_id), ai_findings(count)')
+    .select('uuid, status, kind, summary, started_at, completed_at, created_at, updated_at, contracts!inner(uuid, name, owner_id), ai_findings(count)')
     .eq('contracts.owner_id', auth.user_id);
 
   if (contractId) {

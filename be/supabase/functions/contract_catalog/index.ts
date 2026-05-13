@@ -99,9 +99,7 @@ async function handleCreateCatalogContract(req: Request, auth: { user_id: number
   const sourceCode = normalizeSourceCode(body.source_code);
   if (!sourceCode) return badRequest('source_code must be an array of JSON objects');
   const language = body.language || 'solidity';
-  if (!body.expired_at || typeof body.expired_at !== 'string') {
-    return badRequest('expired_at is required');
-  }
+  const expiredAt = typeof body.expired_at === 'string' ? body.expired_at : null;
 
   const { data, error } = await supabase
     .from('contracts')
@@ -111,7 +109,7 @@ async function handleCreateCatalogContract(req: Request, auth: { user_id: number
       name,
       source_code: sourceCode,
       language,
-      expired_at: body.expired_at,
+      expired_at: expiredAt,
       reward_per_finding: body.reward_per_finding || 0,
     })
     .select()

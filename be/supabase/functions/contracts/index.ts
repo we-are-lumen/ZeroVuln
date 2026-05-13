@@ -63,7 +63,7 @@ async function handleGetContract(auth: { user_id: number; is_admin: boolean }, i
     .select(`
       uuid, name, source_code, owner_id, is_catalog, status, gas_estimate, language, reward_per_finding, expired_at, created_at, updated_at,
       audits(
-        uuid, status, kind, prompt_template, summary, started_at, completed_at, created_at,
+        uuid, status, kind, summary, started_at, completed_at, created_at,
         ai_findings(uuid, severity, title, description, line_start, line_end, confidence, gas_saved, status, reasoning_trace, remediation, created_at)
       )
     `)
@@ -85,9 +85,7 @@ async function handleCreateContract(req: Request, auth: { user_id: number }) {
   const sourceCode = normalizeSourceCode(body.source_code);
   if (!sourceCode) return badRequest('source_code must be an array of JSON objects');
   const language = body.language || 'solidity';
-  if (!body.expired_at || typeof body.expired_at !== 'string') {
-    return badRequest('expired_at is required');
-  }
+  const expiredAt = typeof body.expired_at === 'string' ? body.expired_at : null;
 
   const { data, error } = await supabase
     .from('contracts')
@@ -97,7 +95,7 @@ async function handleCreateContract(req: Request, auth: { user_id: number }) {
       name,
       source_code: sourceCode,
       language,
-      expired_at: body.expired_at,
+      expired_at: expiredAt,
     })
     .select()
     .single();
