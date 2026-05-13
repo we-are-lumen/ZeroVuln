@@ -30,3 +30,5 @@ export type AddAuditorFindingPayload = {
     line_start: number
     line_end: number
 }
+
+export type AdminReviewAuditorFinding = AuditorFinding & { users: { id: number, wallet_address: string } }

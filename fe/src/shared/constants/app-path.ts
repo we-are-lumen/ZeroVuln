@@ -3,5 +3,8 @@ export const APP_PATH = {
         index: '/dashboard',
         codeGen: '/dashboard/code-gen',
         audit: '/dashboard/audit'
+    },
+    admin: {
+        index: '/admin'
     }
 } as const

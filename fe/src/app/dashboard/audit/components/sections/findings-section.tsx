@@ -159,7 +159,7 @@ const FindingsSection = () => {
         <h3 className="text-sm font-bold text-mist-400">FINDINGS</h3>
       </div>
       <div className="grow space-y-4 overflow-y-auto p-6">
-        {filteredFindings.length === 0 && (
+        {filteredFindings.length === 0 && !isQueryFindingsLoading && (
           <div className="flex size-full items-center justify-center">
             <p className="py-10 text-center text-xs text-zinc-500 italic">
               No findings yet for this contract
