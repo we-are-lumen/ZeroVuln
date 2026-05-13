@@ -39,6 +39,7 @@ import {
 import { AUDITOR_FINDING_QUERY_KEY } from "../../hooks/use-query-auditor-finding";
 import { useQueryClient } from "@tanstack/react-query";
 import { Spinner } from "@/shared/components/ui/spinner";
+import CodeSkeleton from "../skeletons/code-skeleton";
 
 const formSchema = z.object({
   title: z.string().min(1, "Title is required"),
@@ -193,9 +194,7 @@ const EditorSection = () => {
             </p>
           </div>
         ) : isLoading ? (
-          <div className="p-6 text-center text-sm text-zinc-500">
-            Loading code...
-          </div>
+          <CodeSkeleton />
         ) : (
           <SyntaxHighlighter
             language="solidity"
