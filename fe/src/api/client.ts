@@ -14,7 +14,7 @@ export const api = ky.create({
   // ky v2: `prefixUrl` diganti jadi `prefix`
   // (lihat error: "The `prefixUrl` option has been renamed `prefix` in v2")
   prefix: API_BASE_URL,
-  timeout: 10000,
+  timeout: 60_000,
   hooks: {
     beforeRequest: [
       ({ request }) => {

@@ -10,6 +10,7 @@ import {
 } from "@/shared/components/ui/breadcrumb";
 import { APP_PATH } from "@/shared/constants/app-path";
 import EditorSection from "./components/sections/editor-section";
+import AiFindingsSection from "./components/sections/ai-findings-section";
 
 const CodeGenResultPage = () => {
   return (
@@ -29,6 +30,7 @@ const CodeGenResultPage = () => {
       </Breadcrumb>
       <main className="flex grow gap-3">
         <EditorSection />
+        <AiFindingsSection />
       </main>
     </div>
   );

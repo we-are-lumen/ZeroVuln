@@ -20,11 +20,11 @@ const getIndentClass = (level: number) => {
   }
 };
 
-const CodeSkeleton = () => {
+const CodeSkeleton = ({ totalLines = 30 }: { totalLines?: number }) => {
   const [lines, setLines] = useState<Line[]>([]);
 
   useLayoutEffect(() => {
-    const generatedLines = [...Array(30)].map(() => ({
+    const generatedLines = [...Array(totalLines)].map(() => ({
       width: Math.floor(Math.random() * (95 - 40 + 1) + 40),
       indent: Math.floor(Math.random() * 3),
     }));
