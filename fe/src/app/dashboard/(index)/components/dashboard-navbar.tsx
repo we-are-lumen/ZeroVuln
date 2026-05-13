@@ -10,12 +10,13 @@ import {
   DropdownMenuTrigger,
 } from "@/shared/components/ui/dropdown-menu";
 import truncateWallet from "@/shared/lib/helpers/trucateWalletAddress";
-import { Logout01Icon } from "@hugeicons/core-free-icons";
+import { Logout01Icon, UserIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { navItems } from "../constants/nav-items";
 import NavItem from "./nav-item";
+import { APP_PATH } from "@/shared/constants/app-path";
 
 const DashboardNavbar = () => {
   const [wallet, setWallet] = useState<string>("");
@@ -81,6 +82,15 @@ const DashboardNavbar = () => {
             align="end"
             className="w-48 border-mist-800 bg-zinc-950 text-white"
           >
+            <DropdownMenuItem className="cursor-pointer">
+              <Link
+                href={APP_PATH.dashboard.profile}
+                className="flex w-full items-center gap-2"
+              >
+                <HugeiconsIcon icon={UserIcon} size={16} />
+                <span>Profile</span>
+              </Link>
+            </DropdownMenuItem>
             <DropdownMenuItem
               onClick={handleDisconnect}
               className="flex cursor-pointer items-center gap-2 text-rose-500 focus:bg-rose-500/10 focus:text-rose-500"

@@ -1,15 +1,14 @@
 "use client";
 
 import { Badge } from "@/shared/components/ui/badge";
-import useQueryContract from "./hooks/use-query-contracts";
-import formatRelativeTime from "@/shared/lib/helpers/formatRelativeTime";
 import { Button } from "@/shared/components/ui/button";
-import { HugeiconsIcon } from "@hugeicons/react";
+import formatRelativeTime from "@/shared/lib/helpers/formatRelativeTime";
 import { ArrowRight02Icon } from "@hugeicons/core-free-icons";
-import Link from "next/link";
+import { HugeiconsIcon } from "@hugeicons/react";
+import useQueryContract from "./hooks/use-query-contracts";
 
 const DashboardPage = () => {
-  const { data, isLoading, isError, error } = useQueryContract();
+  const { data, isLoading } = useQueryContract();
 
   const renderCards = () =>
     data?.map(
