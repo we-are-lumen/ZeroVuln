@@ -123,10 +123,10 @@ const AdminDashboardPage = () => {
 
   return (
     <main className="flex h-full flex-col space-y-6 p-6">
-      <div className="flex items-center justify-between">
+      <div className="mb-6 flex items-center justify-between border-b pb-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Review Findings</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-sm text-mist-500">
             Review and manage security vulnerabilities submitted by auditors.
           </p>
         </div>
@@ -151,7 +151,7 @@ const AdminDashboardPage = () => {
             {isLoading ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={8}
                   className="h-24 text-center text-muted-foreground"
                 >
                   Loading findings...
@@ -160,7 +160,7 @@ const AdminDashboardPage = () => {
             ) : !data || data.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={7}
+                  colSpan={8}
                   className="h-24 text-center text-muted-foreground italic"
                 >
                   <div className="flex h-32 flex-col items-center justify-center gap-4">
