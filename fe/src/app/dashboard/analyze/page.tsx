@@ -2,14 +2,20 @@
 
 import { Button } from "@/shared/components/ui/button";
 import { Textarea } from "@/shared/components/ui/textarea";
+import { APP_PATH } from "@/shared/constants/app-path";
+import { payForFeature } from "@/shared/lib/zv-contract";
 import { ShieldBlockchainIcon, Upload01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useRouter } from "next/navigation";
 import React, { KeyboardEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
+import useAnalyzeSmartContract from "./hooks/use-analyze-smart-contract";
 
 const AnalyzePage = () => {
   const [code, setCode] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const router = useRouter();
+  const { mutateAsync: analyze, isPending } = useAnalyzeSmartContract();
 
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -39,12 +45,32 @@ const AnalyzePage = () => {
     reader.readAsText(file);
   };
 
-  const handleAnalyze = () => {
+  const handleAnalyze = async () => {
     if (!code.trim()) {
       toast.error("Please provide some contract code to analyze");
       return;
     }
-    console.log("Analyzing code:", code);
+
+    try {
+      await toast.promise(payForFeature("Analyze", `analyze:${Date.now()}`), {
+        loading: "Memproses pembayaran 0.1 0g...",
+        success: () => "Pembayaran berhasil.",
+        error: (err: unknown) =>
+          err instanceof Error ? err.message : "Pembayaran gagal.",
+      });
+
+      await toast.promise(analyze({ code }), {
+        loading: "Menganalisis smart contract...",
+        success: (data) => {
+          router.push(`${APP_PATH.dashboard.codeGen}/${data.contract_id}`);
+          return "Analisis selesai.";
+        },
+        error: (err: unknown) =>
+          err instanceof Error ? err.message : "Gagal analyze smart contract.",
+      });
+    } catch {
+      // toast sudah handle
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -106,7 +132,7 @@ const AnalyzePage = () => {
                 size={24}
                 strokeWidth={2}
               />
-              Analyze
+              {isPending ? "Analyzing..." : "Analyze"}
             </Button>
           </div>
         </div>
