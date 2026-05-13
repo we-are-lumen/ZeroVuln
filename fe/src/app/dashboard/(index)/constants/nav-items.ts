@@ -16,7 +16,11 @@ export const navItems: NavItem[] = [
         label: 'Code Gen'
     },
     {
+        href: APP_PATH.dashboard.analyze,
+        label: 'Analyze'
+    },
+    {
         href: APP_PATH.dashboard.audit,
         label: 'Audit'
-    }
+    },
 ]
