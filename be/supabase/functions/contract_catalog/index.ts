@@ -1,4 +1,5 @@
 import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase, corsPreflight } from '../_shared/supabase.ts';
+import { setCatalogRewardOnchain } from '../_shared/zv-contract.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPreflight();
@@ -116,6 +117,21 @@ async function handleCreateCatalogContract(req: Request, auth: { user_id: number
     .single();
 
   if (error) return serverError(error.message);
+
+  // Integrasi on-chain: set reward_per_finding untuk catalog ini
+  try {
+    await setCatalogRewardOnchain({
+      catalogUuid: data.uuid,
+      rewardPerFinding0g: body.reward_per_finding || 0,
+    });
+  } catch (e) {
+    // rollback DB insert supaya konsisten (user request: gagal kalau on-chain gagal)
+    console.error('Failed to set catalog reward on-chain:', e);
+    await supabase.from('contracts').delete().eq('uuid', data.uuid);
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return serverError(`On-chain tx failed: ${msg}`);
+  }
+
   return json(data, 201);
 }
 
@@ -124,7 +140,7 @@ async function handleUpdateCatalogContract(req: Request, auth: { user_id: number
 
   const { data: existing, error: fetchError } = await supabase
     .from('contracts')
-    .select('id, uuid, is_catalog')
+    .select('id, uuid, is_catalog, name, source_code, language, expired_at, reward_per_finding')
     .eq('uuid', id)
     .single();
 
@@ -154,5 +170,30 @@ async function handleUpdateCatalogContract(req: Request, auth: { user_id: number
     .single();
 
   if (error) return serverError(error.message);
+
+  // Integrasi on-chain: update reward mapping jika reward_per_finding di-set (termasuk set ke 0)
+  try {
+    const nextReward = body.reward_per_finding !== undefined ? body.reward_per_finding : existing.reward_per_finding;
+    await setCatalogRewardOnchain({
+      catalogUuid: id,
+      rewardPerFinding0g: nextReward || 0,
+    });
+  } catch (e) {
+    console.error('Failed to update catalog reward on-chain:', e);
+    // rollback DB update ke nilai sebelumnya
+    await supabase
+      .from('contracts')
+      .update({
+        name: existing.name,
+        source_code: existing.source_code,
+        language: existing.language,
+        expired_at: existing.expired_at,
+        reward_per_finding: existing.reward_per_finding,
+      })
+      .eq('uuid', id);
+    const msg = e instanceof Error ? e.message : 'Unknown error';
+    return serverError(`On-chain tx failed: ${msg}`);
+  }
+
   return json(data);
 }

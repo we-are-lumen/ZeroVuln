@@ -1,5 +1,6 @@
 import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase, corsPreflight } from '../_shared/supabase.ts';
 import { uploadToOgStorage } from '../_shared/og-storage.ts';
+import { allocateRewardFromCatalogOnchain } from '../_shared/zv-contract.ts';
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPreflight();
@@ -60,7 +61,9 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
 
   const { data: finding, error: fetchError } = await supabase
     .from('auditor_findings')
-    .select('id, uuid, title, severity, description, line_start, line_end, review_status, contracts(id, uuid, name, language, is_catalog, source_code)')
+    .select(
+      'id, uuid, contributor_id, title, severity, description, line_start, line_end, review_status, contracts(id, uuid, name, language, is_catalog, source_code, reward_per_finding), users:contributor_id(wallet_address)',
+    )
     .eq('uuid', id)
     .single();
 
@@ -71,21 +74,62 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
   }
 
   const contract = (Array.isArray(finding.contracts) ? finding.contracts[0] : finding.contracts) as
-    | { id: number; uuid: string; name: string; language: string | null; is_catalog: boolean; source_code: unknown }
+    | {
+        id: number;
+        uuid: string;
+        name: string;
+        language: string | null;
+        is_catalog: boolean;
+        source_code: unknown;
+        reward_per_finding?: number | null;
+      }
     | null;
   if (!contract?.is_catalog) return badRequest('Contract must be a catalog contract');
 
+  const submitterWallet = (finding.users as { wallet_address?: string } | null)?.wallet_address;
+  if (!submitterWallet) return badRequest('Submitter wallet address not found');
+
+  const decidedAt = new Date().toISOString();
+  const rewardPerFinding = contract.reward_per_finding ?? 0;
+
+  // Step 1: Update DB (optimistic). Jika on-chain gagal, kita rollback.
   const { data: updated, error } = await supabase
     .from('auditor_findings')
     .update({
       review_status: 'approved',
-      decided_at: new Date().toISOString(),
+      decided_at: decidedAt,
+      reward_amount: rewardPerFinding,
     })
     .eq('uuid', id)
     .select()
     .single();
 
   if (error) return serverError(error.message);
+
+  // Step 2: On-chain allocate reward (jika reward > 0)
+  if (rewardPerFinding > 0) {
+    try {
+      await allocateRewardFromCatalogOnchain({
+        findingUuid: finding.uuid,
+        catalogUuid: contract.uuid,
+        submitterWalletAddress: submitterWallet,
+      });
+    } catch (e) {
+      console.error('Failed to allocate reward on-chain:', e);
+      // rollback DB ke status submitted supaya konsisten (user request: gagal jika on-chain gagal)
+      await supabase
+        .from('auditor_findings')
+        .update({
+          review_status: 'submitted',
+          decided_at: null,
+          reward_amount: 0,
+        })
+        .eq('uuid', id);
+
+      const msg = e instanceof Error ? e.message : 'Unknown error';
+      return serverError(`On-chain tx failed: ${msg}`);
+    }
+  }
 
   try {
     const snippet = sliceSourceByLines(contract.source_code, finding.line_start, finding.line_end);
