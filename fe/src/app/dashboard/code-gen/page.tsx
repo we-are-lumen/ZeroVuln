@@ -23,7 +23,7 @@ const CodeGenPage = () => {
         />
         <div className="flex justify-end">
           <Button>
-            <HugeiconsIcon icon={SparklesIcon} />
+            <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} size={18} />
             Generate
           </Button>
         </div>

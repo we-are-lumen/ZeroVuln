@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useRef } from "react";
 import { Button } from "@/shared/components/ui/button";
 import { Textarea } from "@/shared/components/ui/textarea";
-import { toast } from "sonner";
-import { Upload01Icon, AiSearchIcon } from "@hugeicons/core-free-icons";
+import { AiSecurity01Icon, Upload01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import React, { useRef, useState } from "react";
+import { toast } from "sonner";
 
 const AnalyzePage = () => {
   const [code, setCode] = useState("");
@@ -52,7 +52,7 @@ const AnalyzePage = () => {
       </div>
 
       <div className="w-full max-w-4xl rounded-2xl border border-mist-800 p-1 backdrop-blur-sm">
-        <div className="relative flex flex-col space-y-4 rounded-xl bg-mist-950/50 p-6">
+        <div className="relative flex flex-col space-y-6 rounded-xl bg-mist-950/50 p-6">
           <Textarea
             placeholder="Paste your smart contract here"
             rows={10}
@@ -61,7 +61,7 @@ const AnalyzePage = () => {
             onChange={(e) => setCode(e.target.value)}
           />
 
-          <div className="flex items-center justify-between border-mist-800 pt-4">
+          <div className="flex items-center justify-between border-mist-800">
             <input
               type="file"
               ref={fileInputRef}
@@ -81,8 +81,12 @@ const AnalyzePage = () => {
             </Button>
 
             <Button onClick={handleAnalyze}>
-              <HugeiconsIcon icon={AiSearchIcon} size={18} strokeWidth={2} />
-              Analyze Finding
+              <HugeiconsIcon
+                icon={AiSecurity01Icon}
+                size={18}
+                strokeWidth={2}
+              />
+              Analyze
             </Button>
           </div>
         </div>

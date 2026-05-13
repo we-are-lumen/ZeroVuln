@@ -127,20 +127,22 @@
   html {
     @apply font-sans;
   }
+}
 
-  :-webkit-scrollbar {
+body {
+  ::-webkit-scrollbar {
     @apply w-1;
   }
 
   ::-webkit-scrollbar-track {
-    @apply bg-mist-800;
+    @apply bg-transparent;
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-mist-500;
+    @apply rounded-full bg-mist-700;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-mist-400;
+    @apply bg-mist-600;
   }
 }
