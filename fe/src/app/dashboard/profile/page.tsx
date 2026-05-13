@@ -1,10 +1,12 @@
 "use client";
 
 import useQueryMeProfile from "./hooks/use-query-me-profile";
+import { useClaimZvReward, useQueryZvClaimableReward } from "./hooks/use-zv-reward";
 import truncateWallet from "@/shared/lib/helpers/trucateWalletAddress";
 import formatRelativeTime from "@/shared/lib/helpers/formatRelativeTime";
 import { Badge } from "@/shared/components/ui/badge";
 import { cn } from "@/shared/lib/utils";
+import { Button } from "@/shared/components/ui/button";
 import {
   Card,
   CardContent,
@@ -20,6 +22,9 @@ import {
   TableHeader,
   TableRow,
 } from "@/shared/components/ui/table";
+import { formatEther } from "ethers";
+import { useEffect, useMemo, useState } from "react";
+import { toast } from "sonner";
 
 const getSeverityBadgeClass = (severity: string) => {
   switch (severity.toLowerCase()) {
@@ -38,6 +43,28 @@ const getSeverityBadgeClass = (severity: string) => {
 
 const ProfilePage = () => {
   const { data, isLoading, isError, error } = useQueryMeProfile();
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+
+  useEffect(() => {
+    const wallet = localStorage.getItem("walletAddress");
+    setWalletAddress(wallet);
+  }, []);
+
+  const {
+    data: claimableWei,
+    isLoading: isClaimableLoading,
+    isError: isClaimableError,
+    error: claimableError,
+  } = useQueryZvClaimableReward(walletAddress);
+  const { mutateAsync: claim, isPending: isClaiming } =
+    useClaimZvReward(walletAddress);
+
+  const claimable0g = useMemo(() => {
+    if (!claimableWei) return "0";
+    return Number(formatEther(claimableWei)).toLocaleString(undefined, {
+      maximumFractionDigits: 6,
+    });
+  }, [claimableWei]);
 
   const findings = data?.auditor_findings ?? [];
   const totalFindings = findings.length;
@@ -162,6 +189,56 @@ const ProfilePage = () => {
               </CardContent>
             </Card>
           </div>
+
+          <Card className="border bg-mist-900/50 backdrop-blur-sm">
+            <CardHeader className="border-b">
+              <CardTitle>Rewards (On-chain)</CardTitle>
+              <CardDescription>
+                Reward yang bisa kamu claim dari ZVContract.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+              <div className="space-y-1">
+                <p className="text-xs text-mist-400">Claimable</p>
+                {isClaimableLoading ? (
+                  <p className="text-sm text-mist-400">Loading...</p>
+                ) : isClaimableError ? (
+                  <p className="text-sm text-destructive">
+                    {claimableError instanceof Error
+                      ? claimableError.message
+                      : "Gagal load claimable reward."}
+                  </p>
+                ) : (
+                  <p className="text-xl font-bold tabular-nums">{claimable0g} 0g</p>
+                )}
+              </div>
+
+              <Button
+                onClick={async () => {
+                  try {
+                    await toast.promise(claim(), {
+                      loading: "Mengirim transaksi claim...",
+                      success: () => "Claim berhasil.",
+                      error: (err: unknown) =>
+                        err instanceof Error ? err.message : "Claim gagal.",
+                    });
+                  } catch {
+                    // toast handle
+                  }
+                }}
+                disabled={
+                  isClaiming ||
+                  !walletAddress ||
+                  isClaimableLoading ||
+                  Boolean(isClaimableError) ||
+                  !claimableWei ||
+                  claimableWei === 0n
+                }
+              >
+                {isClaiming ? "Claiming..." : "Claim"}
+              </Button>
+            </CardContent>
+          </Card>
 
           <Card className="border bg-mist-900/50 backdrop-blur-sm">
             <CardHeader className="border-b">

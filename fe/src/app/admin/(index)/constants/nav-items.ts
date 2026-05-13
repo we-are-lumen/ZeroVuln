@@ -11,4 +11,12 @@ export const navItems: NavItem[] = [
         href: APP_PATH.admin.index,
         label: 'Review'
     },
+    {
+        href: APP_PATH.admin.contractCatalog,
+        label: 'Catalog'
+    },
+    {
+        href: APP_PATH.admin.treasury,
+        label: 'Treasury'
+    },
 ]

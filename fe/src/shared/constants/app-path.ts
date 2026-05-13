@@ -7,6 +7,8 @@ export const APP_PATH = {
         profile: '/dashboard/profile'
     },
     admin: {
-        index: '/admin'
+        index: '/admin',
+        contractCatalog: '/admin/contract-catalog',
+        treasury: '/admin/treasury'
     }
 } as const
