@@ -21,3 +21,12 @@ export type AuditorFinding = {
     created_at: string
     updated_at: string
 }
+
+export type AddAuditorFindingPayload = {
+    contract_id: string
+    title: string
+    severity: AuditorFindingSeverity
+    description: string
+    line_start: number
+    line_end: number
+}

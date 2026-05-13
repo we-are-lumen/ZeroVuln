@@ -16,11 +16,9 @@ const FindingsSection = () => {
   const { data: code } = useQueryContractCatalogDetail(selectedScId ?? "");
   const { data: findings } = useQueryAuditorFinding();
 
-  // Helper to extract specific lines for the snippet
   const getVulnerableSnippet = (start: number, end: number | null) => {
     if (!code?.source_code) return "";
 
-    // Line numbers in your data shape are 1-based
     const relevantLines = code.source_code.filter(
       (l) => l.line >= start && l.line <= (end ?? start),
     );
@@ -30,6 +28,8 @@ const FindingsSection = () => {
 
   const getCardClassNames = (severity: AuditorFindingSeverity) => {
     switch (severity) {
+      case "critical":
+        return "border-purple-500/70 bg-purple-500/10";
       case "high":
         return "border-rose-500/70 bg-rose-500/10";
       case "medium":
@@ -43,6 +43,8 @@ const FindingsSection = () => {
 
   const getBadgeClassNames = (severity: AuditorFindingSeverity) => {
     switch (severity) {
+      case "critical":
+        return "bg-purple-500/70";
       case "high":
         return "bg-rose-500/70";
       case "medium":
@@ -66,6 +68,7 @@ const FindingsSection = () => {
         review_status,
       }) => {
         const snippet = getVulnerableSnippet(line_start, line_end);
+        const isMultiLine = line_end !== line_start;
 
         return (
           <div
@@ -101,7 +104,7 @@ const FindingsSection = () => {
               <p className="text-xs">
                 <span className="text-mist-400">Line</span>{" "}
                 <span className="font-semibold text-primary">
-                  {line_start} {line_end ? `- ${line_end}` : null}
+                  {line_start} {isMultiLine ? `- ${line_end}` : null}
                 </span>
               </p>
             </div>
