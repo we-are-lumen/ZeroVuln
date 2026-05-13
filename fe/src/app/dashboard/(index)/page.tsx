@@ -1,12 +1,11 @@
 "use client";
 
 import { Badge } from "@/shared/components/ui/badge";
-import useQueryContract from "./hooks/use-query-contracts";
-import formatRelativeTime from "@/shared/lib/helpers/formatRelativeTime";
 import { Button } from "@/shared/components/ui/button";
-import { HugeiconsIcon } from "@hugeicons/react";
+import formatRelativeTime from "@/shared/lib/helpers/formatRelativeTime";
 import { ArrowRight02Icon } from "@hugeicons/core-free-icons";
-import Link from "next/link";
+import { HugeiconsIcon } from "@hugeicons/react";
+import useQueryContract from "./hooks/use-query-contracts";
 
 const DashboardPage = () => {
   const { data, isLoading, isError, error } = useQueryContract();
@@ -50,6 +49,14 @@ const DashboardPage = () => {
         </div>
       ),
     );
+
+  const renderSkeleton = () =>
+    [...Array(8)].map((_, index) => (
+      <div
+        key={index}
+        className="h-44 w-full animate-pulse rounded-lg bg-mist-800"
+      ></div>
+    ));
 
   return (
     <main className="p-6">

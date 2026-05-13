@@ -42,7 +42,7 @@ export default function RootLayout({
     >
       <body className="flex min-h-full flex-col">
         <MainProvider>
-          <Toaster theme="dark" />
+          <Toaster theme="dark" position="top-right" />
           {children}
         </MainProvider>
       </body>

@@ -4,14 +4,25 @@ import { Button } from "@/shared/components/ui/button";
 import { Textarea } from "@/shared/components/ui/textarea";
 import { AiSecurity01Icon, Upload01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import React, { useRef, useState } from "react";
+import React, { useRef, useState, useEffect, KeyboardEvent } from "react";
 import { toast } from "sonner";
 
 const AnalyzePage = () => {
   const [code, setCode] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. Handle file selection and reading
+  // 1. Create a ref for the textarea
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // 2. Adjust height whenever the code content changes
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  }, [code]);
+
   const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
@@ -36,11 +47,18 @@ const AnalyzePage = () => {
       return;
     }
     console.log("Analyzing code:", code);
-    // TODO: Integrate with your security analysis engine
+  };
+
+  // 3. Handle Enter to submit for consistent UX
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleAnalyze();
+    }
   };
 
   return (
-    <main className="flex min-h-[calc(100vh-80px)] flex-col items-center justify-center p-6">
+    <main className="flex h-full flex-col items-center justify-center p-6">
       <div className="mb-8 flex flex-col items-center space-y-2 text-center">
         <h2 className="text-4xl font-bold tracking-tight text-white uppercase">
           Analyze Your Smart Contract
@@ -54,11 +72,16 @@ const AnalyzePage = () => {
       <div className="w-full max-w-4xl rounded-2xl border border-mist-800 p-1 backdrop-blur-sm">
         <div className="relative flex flex-col space-y-6 rounded-xl bg-mist-950/50 p-6">
           <Textarea
+            ref={textareaRef}
+            style={{
+              minHeight: "10px", // Initial 4 rows
+              maxHeight: "210px", // Maximum 8 rows
+            }}
             placeholder="Paste your smart contract here"
-            rows={10}
-            className="w-full resize-none border-none bg-transparent text-sm leading-relaxed ring-transparent! focus-visible:ring-0!"
             value={code}
             onChange={(e) => setCode(e.target.value)}
+            onKeyDown={handleKeyDown}
+            className="w-full resize-none overflow-y-auto border-none bg-transparent text-sm leading-relaxed ring-transparent! focus-visible:ring-0!"
           />
 
           <div className="flex items-center justify-between border-mist-800">

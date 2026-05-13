@@ -39,30 +39,30 @@ const FindingsSection = () => {
   const getCardClassNames = (severity: AuditorFindingSeverity) => {
     switch (severity) {
       case "critical":
-        return "border-purple-500/70 bg-purple-500/10";
+        return "border-purple-500/30 bg-purple-500/10";
       case "high":
-        return "border-rose-500/70 bg-rose-500/10";
+        return "border-rose-500/30 bg-rose-500/10";
       case "medium":
-        return "border-amber-500/70 bg-amber-500/10";
+        return "border-amber-500/30 bg-amber-500/10";
       case "low":
-        return "border-blue-500/70 bg-blue-500/10";
+        return "border-blue-500/30 bg-blue-500/10";
       default:
-        return "border-zinc-700/70 bg-zinc-900";
+        return "border-zinc-700/30 bg-zinc-900";
     }
   };
 
   const getBadgeClassNames = (severity: AuditorFindingSeverity) => {
     switch (severity) {
       case "critical":
-        return "bg-purple-500/70";
+        return "bg-purple-500/50";
       case "high":
-        return "bg-rose-500/70";
+        return "bg-rose-500/50";
       case "medium":
-        return "bg-amber-500/70";
+        return "bg-amber-500/50";
       case "low":
-        return "bg-sky-500/70";
+        return "bg-sky-500/50";
       default:
-        return "bg-zinc-500/70";
+        return "bg-zinc-500/50";
     }
   };
 
