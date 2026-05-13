@@ -37,27 +37,91 @@ Deno.serve(async (req: Request) => {
   return notFound('Endpoint not found');
 });
 
-async function aiFetch(endpoint: string, payload: unknown): Promise<Response> {
-  // let caCert = Deno.env.get('CA_CERTIFICATE');
+interface AIChatPayload {
+  prompt: string;
+  system_prompt: string;
+}
 
-  // if (!caCert) {
-  //   throw new Error('CA_CERTIFICATE not configured');
-  // }
+async function aiFetch(_endpoint: string, payload: AIChatPayload): Promise<Response> {
+  const apiUrl = Deno.env.get('AI_API_URL') || 'https://ai.sumopod.com/v1/chat/completions';
+  const apiKey = Deno.env.get('AI_API_KEY');
+  const model = Deno.env.get('AI_MODEL') || 'qwen3.6-plus';
+  const maxTokens = parseInt(Deno.env.get('AI_MAX_TOKENS') || '1024', 10);
+  const temperature = parseFloat(Deno.env.get('AI_TEMPERATURE') || '0.7');
 
-  // console.log("Using CA certificate for AI service communication:", caCert);
-  
-  // caCert = caCert.replace(/\\n/g, '\n');
-  // console.log("Cleaned CA certificate:", caCert);
-  // deno-lint-ignore no-explicit-any
-  // const client = (Deno as any).createHttpClient({ caCerts: [caCert] });
+  if (!apiKey) throw new Error('AI_API_KEY not configured');
 
-  return await fetch(`${endpoint}/generate`, {
+  return await fetch(apiUrl, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-    // deno-lint-ignore no-explicit-any
-    // client,
-  } as any);
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: 'system', content: payload.system_prompt },
+        { role: 'user', content: payload.prompt },
+      ],
+      max_tokens: maxTokens,
+      temperature,
+    }),
+  });
+}
+
+function stripJsonFences(s: string): string {
+  let out = s.trim();
+  out = out.replace(/^```(?:json|JSON)?\s*\n?/, '').replace(/\n?```\s*$/, '');
+  if (!out.startsWith('{') || !out.endsWith('}')) {
+    const first = out.indexOf('{');
+    const last = out.lastIndexOf('}');
+    if (first !== -1 && last !== -1 && last > first) {
+      out = out.slice(first, last + 1);
+    }
+  }
+  return out.trim();
+}
+
+function tryParseJson(s: string): unknown {
+  try {
+    return JSON.parse(s);
+  } catch {
+    return JSON.parse(stripJsonFences(s));
+  }
+}
+
+function extractAIContent(aiData: unknown): unknown {
+  if (!aiData || typeof aiData !== 'object') return aiData;
+  const data = aiData as Record<string, unknown>;
+
+  // OpenAI-compatible: choices[0].message.content
+  if (Array.isArray(data.choices) && data.choices.length > 0) {
+    const choice = data.choices[0] as Record<string, unknown>;
+    const message = choice?.message as Record<string, unknown> | undefined;
+    const content = message?.content;
+    if (typeof content === 'string') {
+      try {
+        return tryParseJson(content);
+      } catch {
+        return content;
+      }
+    }
+  }
+
+  // Legacy shape: { response: string | object }
+  if ('response' in data) {
+    const inner = data.response;
+    if (typeof inner === 'string') {
+      try {
+        return tryParseJson(inner);
+      } catch {
+        return inner;
+      }
+    }
+    return inner;
+  }
+
+  return aiData;
 }
 
 function flattenSource(source: unknown): string {
@@ -77,28 +141,16 @@ function codeStringToSourceBlocks(code: string) {
 }
 
 function parseAIResponse(aiData: unknown) {
-  let payload: any = aiData;
-
-  if (payload && typeof payload === 'object' && 'response' in payload) {
-    const responseContent = payload.response;
-    if (typeof responseContent === 'string') {
-      try {
-        payload = JSON.parse(responseContent);
-      } catch (_err) {
-        payload = responseContent;
-      }
-    } else {
-      payload = responseContent;
-    }
-  }
+  const payload = extractAIContent(aiData);
 
   if (payload && typeof payload === 'object') {
-    const code = typeof payload.code === 'string' ? payload.code : '';
-    const mitigations = Array.isArray(payload.vulnerability_mitigations) ? payload.vulnerability_mitigations : [];
+    const p = payload as { code?: unknown; vulnerability_mitigations?: unknown };
+    const code = typeof p.code === 'string' ? p.code : '';
+    const mitigations = Array.isArray(p.vulnerability_mitigations) ? p.vulnerability_mitigations : [];
     return { code, mitigations, raw: payload };
   }
 
-  return { code: typeof aiData === 'string' ? aiData : '', mitigations: [], raw: aiData };
+  return { code: typeof payload === 'string' ? payload : '', mitigations: [], raw: payload };
 }
 
 async function handleCodegen(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
@@ -248,7 +300,7 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
 }
 
 async function handleAudit(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
-  const { code, prompt, contract_id } = body;
+  const { code, contract_id } = body;
 
   if (!code || typeof code !== 'string') {
     return badRequest('code (raw smart contract string) is required');
@@ -387,15 +439,7 @@ interface AuditVulnerability {
 }
 
 function parseAuditResponse(aiData: unknown): { code_fixed: string; vulnerabilities: AuditVulnerability[] } {
-  let payload: unknown = aiData;
-  if (payload && typeof payload === 'object' && 'response' in payload) {
-    const inner = (payload as { response: unknown }).response;
-    if (typeof inner === 'string') {
-      try { payload = JSON.parse(inner); } catch { payload = inner; }
-    } else {
-      payload = inner;
-    }
-  }
+  const payload = extractAIContent(aiData);
   if (payload && typeof payload === 'object') {
     const p = payload as { code_fixed?: unknown; vulnerabilities?: unknown };
     const code_fixed = typeof p.code_fixed === 'string' ? p.code_fixed : '';
