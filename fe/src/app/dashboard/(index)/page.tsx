@@ -20,8 +20,9 @@ const DashboardPage = () => {
   const renderCards = () =>
     data?.map(
       ({ uuid, name, status, gas_eslimate, audits, updated_at, language }) => {
-        const source = audits ? audits[0].kind : null;
-        let targetPath: string | null = null;
+        const source = audits?.[0]?.kind ?? null;
+        // Default ke halaman detail contract (code-gen result page) karena route ini menerima `contract_id`
+        let targetPath: string = APP_PATH.dashboard.codeGen;
 
         if (source === "codegen") targetPath = APP_PATH.dashboard.codeGen;
         if (source === "audit") targetPath = APP_PATH.dashboard.codeGen;
