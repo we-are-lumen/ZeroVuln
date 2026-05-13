@@ -1,0 +1,14 @@
+{
+  "name": "smart-contract",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile",
+    "deploy:galileo": "hardhat run scripts/deploy.js --network galileo"
+  },
+  "dependencies": {
+    "@nomicfoundation/hardhat-ethers": "^3.1.0",
+    "ethers": "^6.15.0",
+    "hardhat": "^2.26.3"
+  }
+}
+
