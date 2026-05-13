@@ -247,4 +247,3 @@ contract ZVContract {
     emit Funded(msg.sender, msg.value);
   }
 }
-

@@ -13,10 +13,8 @@
 
 Output akan mencetak address ZVContract.
 
-## Lokasi contract
-- `contracts/ZVContract.sol`
-
 ## Env untuk integrasi
 Setelah deploy, simpan address contract ini ke:
 - FE: `NEXT_PUBLIC_ZV_CONTRACT_ADDRESS=<address>`
 - BE (Supabase Functions env): `ZV_CONTRACT_ADDRESS=<address>`
+
