@@ -1,4 +1,5 @@
 export const APP_PATH = {
+    landing: '/',
     dashboard: {
         index: '/dashboard',
         codeGen: '/dashboard/code-gen',
