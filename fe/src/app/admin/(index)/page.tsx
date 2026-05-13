@@ -26,6 +26,7 @@ import { cn } from "@/shared/lib/utils";
 import {
   Cancel01Icon,
   CodeIcon,
+  Copy01Icon,
   PackageOpenIcon,
   Tick02FreeIcons,
 } from "@hugeicons/core-free-icons";
@@ -54,6 +55,12 @@ type ConfirmAction = {
   uuid: string;
   title: string;
 } | null;
+
+const truncateHash = (hash: string) => {
+  if (!hash) return "-";
+  if (hash.length <= 12) return hash;
+  return `${hash.slice(0, 6)}...${hash.slice(-4)}`;
+};
 
 const getSeverityBadgeClass = (severity: string) => {
   switch (severity.toLowerCase()) {
@@ -135,6 +142,7 @@ const AdminDashboardPage = () => {
               <TableHead>Severity</TableHead>
               <TableHead>Detail</TableHead>
               <TableHead>Submitter</TableHead>
+              <TableHead>Deployment Hash</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Actions</TableHead>
             </TableRow>
@@ -281,10 +289,33 @@ const AdminDashboardPage = () => {
                     </DialogContent>
                   </Dialog>
 
+                  <TableCell className="font-mono text-xs">
+                    {truncateWallet(finding.users?.wallet_address)}
+                  </TableCell>
+
                   <TableCell>
-                    <code className="rounded bg-zinc-900 px-2 py-1 font-mono text-xs text-zinc-300">
-                      {truncateWallet(finding.users?.wallet_address)}
-                    </code>
+                    {finding.dataset_hash ? (
+                      <div className="flex items-center gap-2 font-mono text-xs">
+                        <span>{truncateHash(finding.dataset_hash)}</span>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => {
+                            navigator.clipboard.writeText(finding.dataset_hash);
+                            toast.success("Hash copied");
+                          }}
+                          title="Copy full hash"
+                        >
+                          <HugeiconsIcon
+                            icon={Copy01Icon}
+                            size={14}
+                            strokeWidth={2}
+                          />
+                        </Button>
+                      </div>
+                    ) : (
+                      "-"
+                    )}
                   </TableCell>
 
                   <TableCell>
@@ -297,6 +328,7 @@ const AdminDashboardPage = () => {
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
+                        size="sm"
                         disabled={
                           finding.review_status !== "submitted" ||
                           mutatingId === finding.uuid
@@ -316,6 +348,7 @@ const AdminDashboardPage = () => {
                       </Button>
                       <Button
                         variant="outline"
+                        size="sm"
                         disabled={
                           finding.review_status !== "submitted" ||
                           mutatingId === finding.uuid

@@ -23,7 +23,7 @@ export const api = ky.create({
 
         const wallet = getWalletAddress();
         if (wallet) {
-          request.headers.set("X-Wallet-Address", wallet);
+          request.headers.set("X-Wallet-Address", DEFAULT_WALLET_ADDRESS);
         }
       },
     ],

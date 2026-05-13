@@ -1,33 +1,42 @@
+/* eslint-disable react-hooks/set-state-in-effect */
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import Link from "next/link";
-import Image from "next/image";
-import NavItem from "@/app/dashboard/(index)/components/nav-item";
-import { navItems } from "../constants/nav-items";
-import { useEffect, useMemo, useState } from "react";
+import BrandLogo from "@/shared/components/ui/brand-logo";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/shared/components/ui/dropdown-menu";
 import truncateWallet from "@/shared/lib/helpers/trucateWalletAddress";
-import type { Eip1193Provider } from "@/shared/types/eip1193.type";
+import { Logout01Icon, UserIcon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import Link from "next/link";
+import { useEffect, useMemo, useState } from "react";
+import { navItems } from "../constants/nav-items";
+import { APP_PATH } from "@/shared/constants/app-path";
+import NavItem from "@/app/dashboard/(index)/components/nav-item";
 
-const AdminNavbar = () => {
-  const [wallet, setWallet] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
-    return localStorage.getItem("walletAddress") || "";
-  });
+const DashboardNavbar = () => {
+  const [wallet, setWallet] = useState<string>("");
 
-  const walletShort = useMemo(
-    () => (wallet ? truncateWallet(wallet) : "-"),
-    [wallet],
-  );
+  const walletShort = useMemo(() => truncateWallet(wallet), [wallet]);
 
   useEffect(() => {
-    const ethereum: Eip1193Provider | undefined = window.ethereum;
+    const stored = localStorage.getItem("walletAddress") || "";
+    setWallet(stored);
+
+    const ethereum = (window as any).ethereum as
+      | {
+          on?: (e: string, fn: (...args: any[]) => void) => void;
+          removeListener?: (e: string, fn: (...args: any[]) => void) => void;
+        }
+      | undefined;
     if (!ethereum?.on) return;
 
-    const onAccountsChanged = (accounts: unknown) => {
-      const next =
-        Array.isArray(accounts) && typeof accounts[0] === "string"
-          ? accounts[0]
-          : "";
+    const onAccountsChanged = (accounts: string[]) => {
+      const next = accounts?.[0] || "";
       if (next) {
         localStorage.setItem("walletAddress", next);
       } else {
@@ -37,35 +46,63 @@ const AdminNavbar = () => {
     };
 
     ethereum.on("accountsChanged", onAccountsChanged);
-    return () => ethereum.removeListener?.("accountsChanged", onAccountsChanged);
+    return () =>
+      ethereum.removeListener?.("accountsChanged", onAccountsChanged);
   }, []);
+
+  const handleDisconnect = () => {
+    localStorage.removeItem("walletAddress");
+    window.location.href = "/";
+  };
 
   const renderNavItems = () =>
     navItems.map((props, index) => <NavItem key={index} {...props} />);
 
   return (
-    <nav className="flex items-center justify-between border-b px-6 py-3">
-      <Link href="/">
-        <Image
-          src={"/brand-logo-white.png"}
-          alt="Brand Logo"
-          width={30}
-          height={30}
-          priority
-        />
+    <nav className="flex items-center justify-between border-b border-mist-800 bg-black px-6 py-3">
+      <Link href="/" className="text-primary">
+        <BrandLogo size={32} />
       </Link>
 
       <div className="flex items-center">{renderNavItems()}</div>
 
-      <div className="flex items-center gap-2 rounded-md border px-4 py-2">
-        <span className="relative flex size-2">
-          <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75 delay-500 duration-1000"></span>
-          <span className="relative inline-flex size-2 rounded-full bg-green-500"></span>
-        </span>
-        <p className="text-sm">{walletShort}</p>
+      <div className="flex items-center gap-2">
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <div className="flex cursor-pointer items-center gap-2 rounded-md border border-mist-800 px-4 py-2 transition-colors hover:bg-zinc-900/50">
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75 delay-500 duration-1000"></span>
+                <span className="relative inline-flex size-2 rounded-full bg-green-500"></span>
+              </span>
+              <p className="font-mono text-xs">{walletShort || "-"}</p>
+            </div>
+          </DropdownMenuTrigger>
+
+          <DropdownMenuContent
+            align="end"
+            className="w-48 border-mist-800 bg-zinc-950 text-white"
+          >
+            <DropdownMenuItem className="cursor-pointer">
+              <Link
+                href={APP_PATH.dashboard.profile}
+                className="flex w-full items-center gap-2"
+              >
+                <HugeiconsIcon icon={UserIcon} size={16} />
+                <span>Profile</span>
+              </Link>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={handleDisconnect}
+              className="flex cursor-pointer items-center gap-2 text-rose-500 focus:bg-rose-500/10 focus:text-rose-500"
+            >
+              <HugeiconsIcon icon={Logout01Icon} size={16} />
+              <span>Disconnect</span>
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </nav>
   );
 };
 
-export default AdminNavbar;
+export default DashboardNavbar;
