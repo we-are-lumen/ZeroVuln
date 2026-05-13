@@ -12,11 +12,8 @@ const ROOT_HASH_RE = /^0x[0-9a-fA-F]{64}$/;
 //   npm install
 //   0g-compute-cli setup-network && 0g-compute-cli login
 //   0g-compute-cli deposit --amount 3                                                                                    
-//   0g-compute-cli transfer-fund --provider 0x... --amount 2 --service fine-tuning                                       
-                                                                                                                       
-//   SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=... \                                                                     
-//   OG_PROVIDER=0x... OG_MODEL=Qwen2.5-0.5B-Instruct OG_CONFIG_PATH=../ai/config-train.json \                          
-//     npm run pull-and-fine-tune -- --limit 200
+//   0g-compute-cli transfer-fund --provider 0x... --amount 2 --service fine-tuning                                                               
+//   npm run pull-and-fine-tune -- --limit 200
 
 interface Args {
   outFile: string;
@@ -32,11 +29,17 @@ interface Args {
   pollTimeoutMs: number;
   pythonBin: string;
   mergeScript: string;
+  hfBaseModel: string;
   hfRepoId: string;
   hfToken: string;
   hfPrivate: boolean;
   skipPush: boolean;
 }
+
+const HF_BASE_MODEL_DEFAULTS: Record<string, string> = {
+  'Qwen2.5-0.5B-Instruct': 'Qwen/Qwen2.5-0.5B-Instruct',
+  'Qwen3-32B': 'Qwen/Qwen3-32B',
+};
 
 function parseArgs(): Args {
   const argv = process.argv.slice(2);
@@ -54,6 +57,7 @@ function parseArgs(): Args {
     pollTimeoutMs: parseInt(process.env.OG_POLL_TIMEOUT_MS || `${60 * 60 * 1000}`, 10),
     pythonBin: process.env.PYTHON_BIN || 'python3',
     mergeScript: process.env.MERGE_SCRIPT || './merge_and_push.py',
+    hfBaseModel: process.env.HF_BASE_MODEL || '',
     hfRepoId: process.env.HF_REPO_ID || '',
     hfToken: process.env.HF_TOKEN || '',
     hfPrivate: (process.env.HF_PRIVATE || '').toLowerCase() === 'true',
@@ -74,6 +78,7 @@ function parseArgs(): Args {
     else if (a === '--poll-timeout-ms') args.pollTimeoutMs = parseInt(argv[++i], 10);
     else if (a === '--python-bin') args.pythonBin = argv[++i];
     else if (a === '--merge-script') args.mergeScript = argv[++i];
+    else if (a === '--hf-base-model') args.hfBaseModel = argv[++i];
     else if (a === '--hf-repo-id') args.hfRepoId = argv[++i];
     else if (a === '--hf-token') args.hfToken = argv[++i];
     else if (a === '--hf-private') args.hfPrivate = true;
@@ -114,11 +119,19 @@ async function mergeAndPush(
   const workDir = path.resolve(args.modelOutDir, `task-${taskId}`);
   const mergedOut = path.resolve(workDir, 'merged');
 
+  const hfBase = args.hfBaseModel || HF_BASE_MODEL_DEFAULTS[args.model] || args.model;
+  if (!hfBase.includes('/')) {
+    throw new Error(
+      `HuggingFace base model "${hfBase}" is not a valid repo id (expected "org/name"). ` +
+        `Set --hf-base-model or HF_BASE_MODEL env (e.g. Qwen/${args.model}).`,
+    );
+  }
+
   const cliArgs = [
     scriptPath,
     '--adapter-zip', decryptedZipPath,
     '--work-dir', workDir,
-    '--base-model', args.model,
+    '--base-model', hfBase,
     '--merged-out', mergedOut,
     '--repo-id', args.hfRepoId,
     '--hf-token', args.hfToken,
