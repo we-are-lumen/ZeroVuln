@@ -59,7 +59,7 @@ const DashboardNavbar = () => {
     navItems.map((props, index) => <NavItem key={index} {...props} />);
 
   return (
-    <nav className="flex items-center justify-between border-b border-mist-800 bg-black px-6 py-3">
+    <nav className="flex items-center justify-between border-b border-mist-800 bg-background px-6 py-3">
       <Link href="/" className="text-primary">
         <BrandLogo size={32} />
       </Link>
@@ -69,7 +69,7 @@ const DashboardNavbar = () => {
       <div className="flex items-center gap-2">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <div className="flex cursor-pointer items-center gap-2 rounded-md border border-mist-800 px-4 py-2 transition-colors hover:bg-zinc-900/50">
+            <div className="flex cursor-pointer items-center gap-2 rounded-md border border-mist-800 px-4 py-2 transition-colors hover:bg-mist-900/50">
               <span className="relative flex size-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75 delay-500 duration-1000"></span>
                 <span className="relative inline-flex size-2 rounded-full bg-green-500"></span>
@@ -80,7 +80,7 @@ const DashboardNavbar = () => {
 
           <DropdownMenuContent
             align="end"
-            className="w-48 border-mist-800 bg-zinc-950 text-white"
+            className="w-48 border-mist-800 bg-mist-950 text-white"
           >
             <DropdownMenuItem className="cursor-pointer">
               <Link

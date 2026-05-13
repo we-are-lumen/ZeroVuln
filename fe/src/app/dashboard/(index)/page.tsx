@@ -103,7 +103,7 @@ const DashboardPage = () => {
     <main className="p-6">
       <div className="mb-6 border-b pb-3">
         <h2 className="text-2xl font-bold">Project Workspace</h2>
-        <p className="text-mist-500">
+        <p className="text-sm text-mist-500">
           Manage and review your generated smart contracts, security audits, and
           gas optimization metrics.
         </p>
