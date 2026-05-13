@@ -25,7 +25,7 @@ const DashboardPage = () => {
         let targetPath: string = APP_PATH.dashboard.codeGen;
 
         if (source === "codegen") targetPath = APP_PATH.dashboard.codeGen;
-        if (source === "audit") targetPath = APP_PATH.dashboard.codeGen;
+        if (source === "audit") targetPath = APP_PATH.dashboard.analyze;
 
         return (
           <div key={uuid} className="rounded-lg border bg-mist-900/50 p-3">
