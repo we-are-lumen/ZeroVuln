@@ -11,7 +11,8 @@ module.exports = {
     },
   },
   paths: {
-    sources: ".",
+    // Jangan pakai "." karena Hardhat akan ikut scan node_modules dan bisa kena HH1006
+    sources: "contracts",
     tests: "test",
     cache: "cache",
     artifacts: "artifacts",
@@ -24,4 +25,3 @@ module.exports = {
     },
   },
 };
-
