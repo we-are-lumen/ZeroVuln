@@ -3,7 +3,12 @@
 import { Badge } from "@/shared/components/ui/badge";
 import { Button } from "@/shared/components/ui/button";
 import formatRelativeTime from "@/shared/lib/helpers/formatRelativeTime";
-import { ArrowRight02Icon } from "@hugeicons/core-free-icons";
+import {
+  ArrowRight02Icon,
+  PackageOpenIcon,
+  ShieldBlockchainIcon,
+  SparklesIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import useQueryContract from "./hooks/use-query-contracts";
 import Link from "next/link";
@@ -30,7 +35,7 @@ const DashboardPage = () => {
                   <span className="capitalize">{language}</span>
                 </p>
               </div>
-              <Badge variant="outline" className="capitalize">
+              <Badge variant="outline" className="text-mist-500 capitalize">
                 {status}
               </Badge>
             </div>
@@ -44,12 +49,16 @@ const DashboardPage = () => {
                 <p className="font-bold">{gas_eslimate ?? "-"}</p>
               </div>
             </div>
-            <div className="flex items-end justify-between">
+            <div className="flex items-center justify-between">
               <p className="text-xs text-mist-500">
                 Edited {formatRelativeTime(updated_at)} ago
               </p>
               <Link href={`${targetPath}/${uuid}`}>
-                <Button size="xs" variant="outline">
+                <Button
+                  size="xs"
+                  variant="ghost"
+                  className="text-primary hover:text-primary/80"
+                >
                   <span>Open</span>
                   <HugeiconsIcon icon={ArrowRight02Icon} strokeWidth={2} />
                 </Button>
@@ -68,6 +77,28 @@ const DashboardPage = () => {
       ></div>
     ));
 
+  const renderEmptyFallback = () => (
+    <div className="flex h-[40dvh] w-full flex-col items-center justify-center rounded-2xl border-2 border-dotted p-3 text-mist-500">
+      <HugeiconsIcon icon={PackageOpenIcon} size={52} />
+      <h3 className="mt-2 text-xl font-bold text-white">No Projects Yet</h3>
+      <p>Generate or analyze to get secured smart contract</p>
+      <div className="mt-5 flex gap-2">
+        <Button>
+          <HugeiconsIcon icon={SparklesIcon} strokeWidth={2} size={24} />
+          <span>Generate Contract</span>
+        </Button>
+        <Button variant="outline">
+          <HugeiconsIcon
+            icon={ShieldBlockchainIcon}
+            strokeWidth={2}
+            size={24}
+          />
+          Analyze Contract
+        </Button>{" "}
+      </div>
+    </div>
+  );
+
   return (
     <main className="p-6">
       <div className="mb-6 border-b pb-3">
@@ -77,10 +108,14 @@ const DashboardPage = () => {
           gas optimization metrics.
         </p>
       </div>
-      <section className="grid grid-cols-4 gap-3">
-        {isLoading && renderSkeleton()}
-        {!isLoading && renderCards()}
-      </section>
+      {data && data.length === 0 && renderEmptyFallback()}
+
+      {data && data.length > 0 && (
+        <section className="grid grid-cols-4 gap-3">
+          {isLoading && renderSkeleton()}
+          {!isLoading && renderCards()}
+        </section>
+      )}
     </main>
   );
 };

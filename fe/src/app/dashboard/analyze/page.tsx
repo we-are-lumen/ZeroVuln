@@ -2,19 +2,17 @@
 
 import { Button } from "@/shared/components/ui/button";
 import { Textarea } from "@/shared/components/ui/textarea";
-import { AiSecurity01Icon, Upload01Icon } from "@hugeicons/core-free-icons";
+import { ShieldBlockchainIcon, Upload01Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import React, { useRef, useState, useEffect, KeyboardEvent } from "react";
+import React, { KeyboardEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 
 const AnalyzePage = () => {
   const [code, setCode] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // 1. Create a ref for the textarea
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // 2. Adjust height whenever the code content changes
   useEffect(() => {
     const textarea = textareaRef.current;
     if (textarea) {
@@ -49,7 +47,6 @@ const AnalyzePage = () => {
     console.log("Analyzing code:", code);
   };
 
-  // 3. Handle Enter to submit for consistent UX
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
@@ -74,8 +71,8 @@ const AnalyzePage = () => {
           <Textarea
             ref={textareaRef}
             style={{
-              minHeight: "10px", // Initial 4 rows
-              maxHeight: "210px", // Maximum 8 rows
+              minHeight: "10px",
+              maxHeight: "210px",
             }}
             placeholder="Paste your smart contract here"
             value={code}
@@ -105,8 +102,8 @@ const AnalyzePage = () => {
 
             <Button onClick={handleAnalyze}>
               <HugeiconsIcon
-                icon={AiSecurity01Icon}
-                size={18}
+                icon={ShieldBlockchainIcon}
+                size={24}
                 strokeWidth={2}
               />
               Analyze
