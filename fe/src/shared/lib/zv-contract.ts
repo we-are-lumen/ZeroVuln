@@ -1,4 +1,10 @@
-import { BrowserProvider, Contract, keccak256, toUtf8Bytes } from "ethers";
+import {
+  BrowserProvider,
+  Contract,
+  keccak256,
+  parseEther,
+  toUtf8Bytes,
+} from "ethers";
 import { ensureOgGalileoChain } from "./wallet/og-galileo";
 import type { Eip1193Provider } from "@/shared/types/eip1193.type";
 
@@ -9,6 +15,7 @@ const ZV_ABI = [
   "function payForFeature(uint8 feature, bytes32 refId) payable",
   "function claimableRewards(address user) view returns (uint256)",
   "function claimReward()",
+  "function fund() payable",
 ];
 
 function getEthereum(): Eip1193Provider | undefined {
@@ -80,3 +87,29 @@ export async function claimReward() {
   return { txHash: tx.hash };
 }
 
+export async function getContractBalanceWei(): Promise<bigint> {
+  const ethereum = getEthereum();
+  if (!ethereum) throw new Error("Wallet provider tidak ditemukan.");
+
+  await ensureOgGalileoChain(ethereum);
+
+  const provider = new BrowserProvider(ethereum);
+  const balance = await provider.getBalance(requireContractAddress());
+  return balance;
+}
+
+export async function fundContract(amount0g: string) {
+  const ethereum = getEthereum();
+  if (!ethereum) throw new Error("Wallet provider tidak ditemukan.");
+
+  await ensureOgGalileoChain(ethereum);
+
+  const provider = new BrowserProvider(ethereum);
+  const signer = await provider.getSigner();
+  const zv = new Contract(requireContractAddress(), ZV_ABI, signer);
+
+  const value = parseEther(amount0g);
+  const tx = await zv.fund({ value });
+  await tx.wait();
+  return { txHash: tx.hash };
+}

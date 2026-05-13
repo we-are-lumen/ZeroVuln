@@ -8,6 +8,7 @@ export const APP_PATH = {
     },
     admin: {
         index: '/admin',
-        contractCatalog: '/admin/contract-catalog'
+        contractCatalog: '/admin/contract-catalog',
+        treasury: '/admin/treasury'
     }
 } as const
