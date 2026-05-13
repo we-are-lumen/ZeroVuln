@@ -14,7 +14,7 @@ Deno.serve(async (req: Request) => {
   const url = new URL(req.url);
   const pathParts = url.pathname.split('/').filter(Boolean);
   const aiIndex = pathParts.indexOf('ai');
-  const segment = aiIndex !== -1 && pathParts.length > aiIndex + 2 ? pathParts[aiIndex + 1] : '';
+  const segment = pathParts[aiIndex + 1];
 
   if (req.method !== 'POST') return badRequest('Method not allowed');
 
