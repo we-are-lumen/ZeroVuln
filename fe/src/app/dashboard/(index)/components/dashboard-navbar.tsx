@@ -16,27 +16,36 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { navItems } from "../constants/nav-items";
 import NavItem from "./nav-item";
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "@/shared/components/ui/button";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { Logout01Icon } from "@hugeicons/core-free-icons";
+import type { Eip1193Provider } from "@/shared/types/eip1193.type";
 import { APP_PATH } from "@/shared/constants/app-path";
 
+function truncateWallet(wallet: string) {
+  if (!wallet) return "";
+  if (wallet.length <= 12) return wallet;
+  return `${wallet.slice(0, 6)}...${wallet.slice(-4)}`;
+}
+
 const DashboardNavbar = () => {
-  const [wallet, setWallet] = useState<string>("");
+  const [wallet, setWallet] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    return localStorage.getItem("walletAddress") || "";
+  });
 
   const walletShort = useMemo(() => truncateWallet(wallet), [wallet]);
 
   useEffect(() => {
-    const stored = localStorage.getItem("walletAddress") || "";
-    setWallet(stored);
-
-    const ethereum = (window as any).ethereum as
-      | {
-          on?: (e: string, fn: (...args: any[]) => void) => void;
-          removeListener?: (e: string, fn: (...args: any[]) => void) => void;
-        }
-      | undefined;
+    const ethereum: Eip1193Provider | undefined = window.ethereum;
     if (!ethereum?.on) return;
 
-    const onAccountsChanged = (accounts: string[]) => {
-      const next = accounts?.[0] || "";
+    const onAccountsChanged = (accounts: unknown) => {
+      const next =
+        Array.isArray(accounts) && typeof accounts[0] === "string"
+          ? accounts[0]
+          : "";
       if (next) {
         localStorage.setItem("walletAddress", next);
       } else {
@@ -78,6 +87,15 @@ const DashboardNavbar = () => {
             </div>
           </DropdownMenuTrigger>
 
+        <Button
+          size="icon-sm"
+          variant="outline"
+          onClick={handleDisconnect}
+          aria-label="Disconnect wallet"
+          title="Disconnect"
+        >
+          <HugeiconsIcon icon={Logout01Icon} strokeWidth={2} />
+        </Button>
           <DropdownMenuContent
             align="end"
             className="w-48 border-mist-800 bg-zinc-950 text-white"

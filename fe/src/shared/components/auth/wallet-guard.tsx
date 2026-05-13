@@ -3,10 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { ensureOgGalileoChain } from "@/shared/lib/wallet/og-galileo";
-
-type Eip1193Provider = {
-  request: (args: { method: string; params?: unknown[] | object }) => Promise<any>;
-};
+import type { Eip1193Provider } from "@/shared/types/eip1193.type";
 
 /**
  * Guard simpel berbasis localStorage.
@@ -23,7 +20,7 @@ export default function WalletGuard({ children }: { children: React.ReactNode })
       return;
     }
 
-    const ethereum = (window as any).ethereum as Eip1193Provider | undefined;
+    const ethereum: Eip1193Provider | undefined = window.ethereum;
     if (!ethereum) return;
 
     // Pastikan chain sesuai 0G Galileo testnet
