@@ -38,12 +38,13 @@ Deno.serve(async (req: Request) => {
 });
 
 async function aiFetch(endpoint: string, payload: unknown): Promise<Response> {
-  const caCert = Deno.env.get('CA_CERTIFICATE');
+  let caCert = Deno.env.get('CA_CERTIFICATE');
 
   if (!caCert) {
     throw new Error('CA_CERTIFICATE not configured');
   }
 
+  caCert = caCert.replace(/\\n/g, '\n');
   // deno-lint-ignore no-explicit-any
   const client = (Deno as any).createHttpClient({ caCerts: [caCert] });
 
