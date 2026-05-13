@@ -9,6 +9,7 @@ import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useGenerateSmartContract } from "./hooks/use-generate-smart-contract";
 import { ChangeEvent, useState, KeyboardEvent, useRef, useEffect } from "react";
+import { payForFeature } from "@/shared/lib/zv-contract";
 
 const CodeGenPage = () => {
   const router = useRouter();
@@ -34,22 +35,34 @@ const CodeGenPage = () => {
       return;
     }
 
-    toast.promise(generate({ prompt }), {
-      loading: "AI is crafting your Solidity contract...",
-      success: (data) => {
-        if (!data.generated_code || data.generated_code.length <= 1) {
-          throw new Error("Generation failed: Empty code received.");
-        }
+    try {
+      // Bayar 0.1 0g (fee on-chain) sebelum menggunakan fitur CodeGen
+      await toast.promise(payForFeature("CodeGen", `codegen:${Date.now()}`), {
+        loading: "Memproses pembayaran 0.1 0g...",
+        success: () => "Pembayaran berhasil.",
+        error: (err: unknown) =>
+          err instanceof Error ? err.message : "Pembayaran gagal.",
+      });
 
-        router.push(`${APP_PATH.dashboard.codeGen}/${data.contract_id}`);
-        return "Contract generated successfully!";
-      },
-      error: (err: Error) => {
-        return (
-          err.message || "Failed to generate smart contract. Please try again."
-        );
-      },
-    });
+      toast.promise(generate({ prompt }), {
+        loading: "AI is crafting your Solidity contract...",
+        success: (data) => {
+          if (!data.generated_code || data.generated_code.length <= 1) {
+            throw new Error("Generation failed: Empty code received.");
+          }
+
+          router.push(`${APP_PATH.dashboard.codeGen}/${data.contract_id}`);
+          return "Contract generated successfully!";
+        },
+        error: (err: Error) => {
+          return (
+            err.message || "Failed to generate smart contract. Please try again."
+          );
+        },
+      });
+    } catch {
+      // toast sudah handle error message
+    }
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {

@@ -2,3 +2,6 @@
 source_code_report.md
 source_files_index.json
 
+# macOS
+.DS_Store
+**/.DS_Store
