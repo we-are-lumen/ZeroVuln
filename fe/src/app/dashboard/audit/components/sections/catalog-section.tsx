@@ -54,8 +54,9 @@ const CatalogSection = () => {
           >
             <div>
               <h4 className="line-clamp-1 font-semibold">{name}</h4>
-              <p className="text-xs text-mist-400 capitalize">
-                {language} · Expires in {formatRelativeTime(expired_at)}
+              <p className="text-xs text-mist-400">
+                <span className="capitalize">{language}</span> · Expires in{" "}
+                {formatRelativeTime(expired_at)}
               </p>
             </div>
             <div className="mt-4 flex border-y py-2">

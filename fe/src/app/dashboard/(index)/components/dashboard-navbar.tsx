@@ -1,7 +1,7 @@
+import BrandLogo from "@/shared/components/ui/brand-logo";
 import Link from "next/link";
 import { navItems } from "../constants/nav-items";
 import NavItem from "./nav-item";
-import Image from "next/image";
 
 const DashboardNavbar = () => {
   const renderNavItems = () =>
@@ -9,14 +9,8 @@ const DashboardNavbar = () => {
 
   return (
     <nav className="flex items-center justify-between border-b px-6 py-3">
-      <Link href="/">
-        <Image
-          src={"/brand-logo-white.png"}
-          alt="Brand Logo"
-          width={30}
-          height={30}
-          priority
-        />
+      <Link href="/" className="text-primary">
+        <BrandLogo size={32} />
       </Link>
 
       <div className="flex items-center">{renderNavItems()}</div>
