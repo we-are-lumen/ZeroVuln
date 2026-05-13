@@ -154,10 +154,8 @@ const EditorSection = () => {
 
   return (
     <section className="flex h-full basis-[50%] flex-col rounded-2xl border bg-mist-900/50">
-      <div className="flex items-center justify-between border-b px-6 py-3">
-        <h3 className="text-sm font-bold text-mist-400">
-          {data?.name || "contract.sol"}
-        </h3>
+      <div className="flex items-center justify-between border-b p-3">
+        <h3 className="text-sm font-bold text-mist-400">{data?.name}</h3>
         <div className="flex items-center gap-3">
           <Button
             size="icon-sm"

@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback } from "react";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
 import { Button } from "@/shared/components/ui/button";
-import useQueryContractCatalog from "../../hooks/use-query-contract-catalog";
-import { cn } from "@/shared/lib/utils";
 import formatRelativeTime from "@/shared/lib/helpers/formatRelativeTime";
+import { cn } from "@/shared/lib/utils";
+import { Radar02Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useCallback } from "react";
+import useQueryContractCatalog from "../../hooks/use-query-contract-catalog";
 
 const CatalogSection = () => {
   const { data, isLoading } = useQueryContractCatalog();
@@ -94,10 +96,13 @@ const CatalogSection = () => {
 
   return (
     <section className="flex h-full basis-[20%] flex-col rounded-2xl border bg-mist-900/50">
-      <div className="border-b px-6 py-3">
-        <h3 className="text-sm font-bold text-mist-400">CATALOG</h3>
+      <div className="border-b p-3">
+        <div className="flex items-center gap-2 text-mist-400">
+          <HugeiconsIcon icon={Radar02Icon} size={20} strokeWidth={2} />
+          <h3 className="text-sm font-bold">CATALOG</h3>
+        </div>
       </div>
-      <div className="grow space-y-3 overflow-y-auto p-6">
+      <div className="grow space-y-3 overflow-y-auto p-3">
         {isLoading && renderSkeleton()}
         {!isLoading && renderCards()}
       </div>

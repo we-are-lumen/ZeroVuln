@@ -1,16 +1,16 @@
 "use client";
 
 import { Badge } from "@/shared/components/ui/badge";
-import useQueryAuditorFinding from "../../hooks/use-query-auditor-finding";
 import { cn } from "@/shared/lib/utils";
 import { AuditorFindingSeverity } from "@/shared/types/auditor-finding.type";
+import { PackageOpenIcon, Target01Icon } from "@hugeicons/core-free-icons";
+import { HugeiconsIcon } from "@hugeicons/react";
 import { useSearchParams } from "next/navigation";
-import useQueryContractCatalogDetail from "../../hooks/use-query-contract-catalog-detail";
+import { useMemo } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { darcula } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { useMemo } from "react";
-import { PackageOpenIcon } from "@hugeicons/core-free-icons";
-import { HugeiconsIcon } from "@hugeicons/react";
+import useQueryAuditorFinding from "../../hooks/use-query-auditor-finding";
+import useQueryContractCatalogDetail from "../../hooks/use-query-contract-catalog-detail";
 
 const FindingsSection = () => {
   const searchParams = useSearchParams();
@@ -157,10 +157,13 @@ const FindingsSection = () => {
 
   return (
     <section className="flex h-full grow-0 basis-[30%] flex-col rounded-2xl border bg-mist-900/50 backdrop-blur-sm">
-      <div className="border-b px-6 py-3">
-        <h3 className="text-sm font-bold text-mist-400">FINDINGS</h3>
+      <div className="border-b p-3">
+        <div className="flex items-center gap-2 text-mist-400">
+          <HugeiconsIcon icon={Target01Icon} size={20} strokeWidth={2} />
+          <h3 className="text-sm font-bold">FINDINGS</h3>
+        </div>
       </div>
-      <div className="grow space-y-4 overflow-y-auto p-6">
+      <div className="grow space-y-4 overflow-y-auto p-3">
         {filteredFindings.length === 0 && !isQueryFindingsLoading && (
           <div className="flex size-full flex-col items-center justify-center gap-4 text-mist-500">
             <HugeiconsIcon icon={PackageOpenIcon} size={44} />
