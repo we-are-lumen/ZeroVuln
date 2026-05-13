@@ -8,13 +8,22 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import { useGenerateSmartContract } from "./hooks/use-generate-smart-contract";
-import { ChangeEvent, useState } from "react";
+import { ChangeEvent, useState, KeyboardEvent, useRef, useEffect } from "react";
 
 const CodeGenPage = () => {
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { mutateAsync: generate, isPending } = useGenerateSmartContract();
+
+  useEffect(() => {
+    const textarea = textareaRef.current;
+    if (textarea) {
+      textarea.style.height = "auto";
+      textarea.style.height = `${textarea.scrollHeight}px`;
+    }
+  }, [prompt]);
 
   const handlePromptChange = (e: ChangeEvent<HTMLTextAreaElement>) =>
     setPrompt(e.target.value);
@@ -43,8 +52,15 @@ const CodeGenPage = () => {
     });
   };
 
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      handleGenerate();
+    }
+  };
+
   return (
-    <main className="-mt-20 flex h-screen w-full flex-col items-center justify-center gap-5 p-6">
+    <main className="flex h-full w-full flex-col items-center justify-center gap-5 p-6">
       <div className="mb-8 flex flex-col items-center space-y-2 text-center">
         <h2 className="text-4xl font-bold tracking-tight text-white uppercase">
           Describe What You Want to Build
@@ -57,11 +73,16 @@ const CodeGenPage = () => {
 
       <section className="w-full max-w-4xl space-y-6 rounded-2xl border border-mist-800 bg-mist-950/50 p-6 backdrop-blur-sm">
         <Textarea
-          rows={8}
+          ref={textareaRef}
+          style={{
+            minHeight: "10px",
+            maxHeight: "210px",
+          }}
           value={prompt}
           onChange={handlePromptChange}
+          onKeyDown={handleKeyDown}
           disabled={isPending}
-          className="w-full resize-none border-none bg-transparent text-sm leading-relaxed ring-transparent! focus-visible:ring-0 disabled:opacity-50"
+          className="w-full resize-none overflow-y-auto border-none bg-transparent text-sm leading-relaxed ring-transparent! focus-visible:ring-0 disabled:opacity-50"
           placeholder="e.g. staking pool with daily rewards, max stake 1000 tokens..."
         />
         <div className="flex justify-end">
