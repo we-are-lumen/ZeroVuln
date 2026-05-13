@@ -37,6 +37,25 @@ Deno.serve(async (req: Request) => {
   return notFound('Endpoint not found');
 });
 
+async function aiFetch(endpoint: string, payload: unknown): Promise<Response> {
+  const caCert = Deno.env.get('CA_CERTIFICATE');
+
+  if (!caCert) {
+    throw new Error('CA_CERTIFICATE not configured');
+  }
+
+  // deno-lint-ignore no-explicit-any
+  const client = (Deno as any).createHttpClient({ caCerts: [caCert] });
+
+  return await fetch(`${endpoint}/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+    // deno-lint-ignore no-explicit-any
+    client,
+  } as any);
+}
+
 function flattenSource(source: unknown): string {
   if (!Array.isArray(source)) return '';
   const parts: string[] = [];
@@ -138,13 +157,9 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
     // Call AI inference endpoint
     const aiEndpoint = Deno.env.get('AI_INFERENCE_URL') || 'http://localhost:8000';
     
-    const aiResponse = await fetch(`${aiEndpoint}/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        prompt: prompt,
-        system_prompt: AI_CODEGEN_SYSTEM_PROMPT,
-      }),
+    const aiResponse = await aiFetch(aiEndpoint, {
+      prompt: prompt,
+      system_prompt: AI_CODEGEN_SYSTEM_PROMPT,
     });
 
     if (!aiResponse.ok) {
@@ -287,13 +302,9 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
       ? prompt
       : 'Audit this Solidity contract for security vulnerabilities.';
 
-    const aiResponse = await fetch(`${aiEndpoint}/generate`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        prompt: `${customPrompt}\n\nCode:\n${code}`,
-        system_prompt: AI_CODEAUDIT_SYSTEM_PROMPT,
-      }),
+    const aiResponse = await aiFetch(aiEndpoint, {
+      prompt: `${customPrompt}\n\nCode:\n${code}`,
+      system_prompt: AI_CODEAUDIT_SYSTEM_PROMPT,
     });
 
     if (!aiResponse.ok) {
