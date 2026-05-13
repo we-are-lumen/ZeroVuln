@@ -141,7 +141,7 @@ const ProfilePage = () => {
                   <div className="rounded-lg border border-mist-800 bg-mist-950/40 p-3">
                     <p className="text-xs text-mist-400">Total reward</p>
                     <p className="text-xl font-bold tabular-nums">
-                      {totalReward.toLocaleString()}
+                      {totalReward.toLocaleString()} 0g
                     </p>
                   </div>
                 </div>
@@ -220,7 +220,9 @@ const ProfilePage = () => {
                           </Badge>
                         </TableCell>
                         <TableCell className="align-top text-right tabular-nums">
-                          {(f.reward_amount ?? 0) ? f.reward_amount?.toLocaleString() : "-"}
+                          {(f.reward_amount ?? 0)
+                            ? `${f.reward_amount?.toLocaleString()} 0g`
+                            : "-"}
                         </TableCell>
                       </TableRow>
                     ))
