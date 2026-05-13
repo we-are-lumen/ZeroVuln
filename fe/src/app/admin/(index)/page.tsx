@@ -26,10 +26,13 @@ import { cn } from "@/shared/lib/utils";
 import {
   Cancel01Icon,
   CodeIcon,
+  PackageOpenIcon,
   Tick02FreeIcons,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import useQueryAdminReviewAuditorFinding from "./hooks/use-query-admin-review-author-findings";
+import useQueryAdminReviewAuditorFinding, {
+  ADMIN_REVIEW_AUDITOR_FINDING_QUERY_KEY,
+} from "./hooks/use-query-admin-review-author-findings";
 import truncateWallet from "@/shared/lib/helpers/trucateWalletAddress";
 import {
   Dialog,
@@ -39,6 +42,12 @@ import {
 } from "@/shared/components/ui/dialog";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { darcula } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { useApproveAditorFinding } from "./hooks/use-approve-auditor-finding";
+import { useRejectAditorFinding } from "./hooks/use-reject-auditor-finding";
+import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import StatusFilter from "./components/status-filter";
+import { useSearchParams } from "next/navigation";
 
 type ConfirmAction = {
   type: "approve" | "reject";
@@ -61,28 +70,48 @@ const getSeverityBadgeClass = (severity: string) => {
   }
 };
 
+const getFormattedCode = (sourceCodeArray: any[]) => {
+  return sourceCodeArray?.map((lineObj) => lineObj.code).join("\n") || "";
+};
+
 const AdminDashboardPage = () => {
-  const { data, isLoading } = useQueryAdminReviewAuditorFinding();
+  const queryClient = useQueryClient();
+  const searchParams = useSearchParams();
+
+  const reviewStatus = searchParams.get("status") ?? "submitted";
+
+  const { data, isLoading } = useQueryAdminReviewAuditorFinding(reviewStatus);
+  const { mutateAsync: approve } = useApproveAditorFinding();
+  const { mutateAsync: reject } = useRejectAditorFinding();
 
   const [confirmAction, setConfirmAction] = useState<ConfirmAction>(null);
-
   const [inspectedFinding, setInspectedFinding] = useState<any | null>(null);
+  const [mutatingId, setMutatingId] = useState<string | null>(null);
 
-  // Helper to convert the source_code array into a single string for the highlighter
-  const getFormattedCode = (sourceCodeArray: any[]) => {
-    return sourceCodeArray?.map((lineObj) => lineObj.code).join("\n") || "";
-  };
-
-  const handleExecuteAction = () => {
+  const handleExecuteAction = async () => {
     if (!confirmAction) return;
 
-    if (confirmAction.type === "approve") {
-      // TODO: Call your useMutation here
-    } else {
-      // TODO: Call your useMutation here
-    }
+    const { uuid, type } = confirmAction;
 
+    setMutatingId(uuid);
     setConfirmAction(null);
+
+    const actionPromise = type === "approve" ? approve(uuid) : reject(uuid);
+
+    toast.promise(actionPromise, {
+      loading: `${type === "approve" ? "Approving" : "Rejecting"} finding...`,
+      success: () => {
+        queryClient.invalidateQueries({
+          queryKey: [ADMIN_REVIEW_AUDITOR_FINDING_QUERY_KEY],
+        });
+        return `Finding ${type === "approve" ? "approved" : "rejected"} successfully`;
+      },
+      error: (err: any) =>
+        `Failed to ${type}: ${err.message || "Unknown error"}`,
+      finally: () => {
+        setMutatingId(null);
+      },
+    });
   };
 
   return (
@@ -95,6 +124,7 @@ const AdminDashboardPage = () => {
           </p>
         </div>
       </div>
+      <StatusFilter />
 
       <div className="rounded-md border bg-mist-900/50 backdrop-blur-sm">
         <Table>
@@ -122,10 +152,13 @@ const AdminDashboardPage = () => {
             ) : !data || data.length === 0 ? (
               <TableRow>
                 <TableCell
-                  colSpan={6}
+                  colSpan={7}
                   className="h-24 text-center text-muted-foreground"
                 >
-                  No findings pending review.
+                  <div className="flex h-32 flex-col items-center justify-center gap-2">
+                    <HugeiconsIcon icon={PackageOpenIcon} />
+                    <p>No findings found</p>
+                  </div>
                 </TableCell>
               </TableRow>
             ) : (
@@ -264,6 +297,10 @@ const AdminDashboardPage = () => {
                     <div className="flex gap-2">
                       <Button
                         variant="outline"
+                        disabled={
+                          finding.review_status !== "submitted" ||
+                          mutatingId === finding.uuid
+                        }
                         className="text-emerald-500 hover:bg-emerald-500/10 hover:text-emerald-400"
                         onClick={() =>
                           setConfirmAction({
@@ -279,6 +316,10 @@ const AdminDashboardPage = () => {
                       </Button>
                       <Button
                         variant="outline"
+                        disabled={
+                          finding.review_status !== "submitted" ||
+                          mutatingId === finding.uuid
+                        }
                         className="text-rose-500 hover:bg-rose-500/10 hover:text-rose-400"
                         onClick={() =>
                           setConfirmAction({
