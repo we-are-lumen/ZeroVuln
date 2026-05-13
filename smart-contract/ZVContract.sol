@@ -44,6 +44,8 @@ contract ZVContract {
     uint256 amount
   );
 
+  event CatalogRewardUpdated(bytes32 indexed catalogId, uint256 rewardPerFinding);
+
   event RewardClaimed(address indexed submitter, uint256 amount);
   event OwnerWithdraw(address indexed to, uint256 amount);
   event Funded(address indexed from, uint256 amount);
@@ -80,6 +82,13 @@ contract ZVContract {
   mapping(bytes32 => bool) public rewardAllocated; // prevent double-allocate per finding
   uint256 public totalOutstandingRewards;
 
+  /**
+   * Reward per finding untuk catalog contract.
+   * - catalogId: bytes32 (rekomendasi: keccak256(bytes(<contract_catalog_uuid_string>))).
+   * - value: amount dalam wei (native token). 1 0g = 1e18 wei.
+   */
+  mapping(bytes32 => uint256) public catalogRewardPerFinding;
+
   // =========================
   // Reentrancy guard (minimal)
   // =========================
@@ -111,6 +120,15 @@ contract ZVContract {
     uint256 old = featureFee;
     featureFee = newFee;
     emit FeatureFeeUpdated(old, newFee);
+  }
+
+  function setCatalogReward(bytes32 catalogId, uint256 rewardPerFindingWei)
+    external
+    onlyAdmin
+  {
+    if (catalogId == bytes32(0)) revert ZeroAmount();
+    catalogRewardPerFinding[catalogId] = rewardPerFindingWei;
+    emit CatalogRewardUpdated(catalogId, rewardPerFindingWei);
   }
 
   /**
@@ -161,14 +179,7 @@ contract ZVContract {
   // =========================
   // Reward flow
   // =========================
-  /**
-   * Dipanggil admin saat approve finding.
-   * findingId: sebaiknya hash dari auditor_finding_uuid (misal keccak256(uuidString)).
-   */
-  function allocateReward(bytes32 findingId, address submitter, uint256 amount)
-    external
-    onlyAdmin
-  {
+  function _allocateReward(bytes32 findingId, address submitter, uint256 amount) internal {
     if (submitter == address(0)) revert ZeroAddress();
     if (amount == 0) revert ZeroAmount();
     if (rewardAllocated[findingId]) revert AlreadyAllocated(findingId);
@@ -183,6 +194,30 @@ contract ZVContract {
     totalOutstandingRewards = required;
 
     emit RewardAllocated(findingId, submitter, amount);
+  }
+
+  /**
+   * Dipanggil admin saat approve finding.
+   * findingId: sebaiknya hash dari auditor_finding_uuid (misal keccak256(uuidString)).
+   */
+  function allocateReward(bytes32 findingId, address submitter, uint256 amount)
+    external
+    onlyAdmin
+  {
+    _allocateReward(findingId, submitter, amount);
+  }
+
+  /**
+   * Versi reward yang ngikutin konfigurasi reward_per_finding dari catalog contract.
+   * catalogId: rekomendasi hash dari contract_catalog.uuid (keccak256(bytes(uuidString))).
+   */
+  function allocateRewardFromCatalog(bytes32 findingId, bytes32 catalogId, address submitter)
+    external
+    onlyAdmin
+  {
+    uint256 amount = catalogRewardPerFinding[catalogId];
+    if (amount == 0) revert ZeroAmount();
+    _allocateReward(findingId, submitter, amount);
   }
 
   function claimReward() external nonReentrant {
@@ -212,4 +247,3 @@ contract ZVContract {
     emit Funded(msg.sender, msg.value);
   }
 }
-
