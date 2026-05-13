@@ -112,6 +112,7 @@ async function handleCreateCatalogContract(req: Request, auth: { user_id: number
       language,
       expired_at: expiredAt,
       reward_per_finding: body.reward_per_finding || 0,
+      total_reward: body.total_reward || 0,
     })
     .select()
     .single();
