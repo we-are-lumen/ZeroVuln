@@ -31,7 +31,7 @@ const CodeSkeleton = ({ totalLines = 30 }: { totalLines?: number }) => {
 
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLines(generatedLines);
-  }, []);
+  }, [totalLines]);
 
   if (lines.length === 0) return;
 
