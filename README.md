@@ -1,7 +1,7 @@
 <div align="center">
   <img src="https://i.ibb.co.com/wFx1JrdK/ZEROVULN.png" alt="ZeroVuln Logo" width="160">
   <p><strong>Next-Generation LLM Inference API & Decentralized Fine-Tuning for Smart Contract Security</strong></p>
-  <p>ZeroVuln is a hackathon repository focused on fine-tuning an LLM using decentralized infrastructure and providing a scalable inference API to detect vulnerabilities and generate secure Solidity smart contracts.</p>
+  <p>ZeroVuln is an advanced security platform focused on fine-tuning LLMs using decentralized infrastructure to detect vulnerabilities and generate secure Solidity smart contracts.</p>
 </div>
 
 ---
