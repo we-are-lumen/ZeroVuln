@@ -46,7 +46,7 @@ export type AiFinding = {
     created_at: string;
     gas_saved: number | null;
     confidence: number | null;
-    remediation: string | null;
+    remediation: unknown | null;
     reasoning_trace: {
         mitigation: AiMitigation;
     };

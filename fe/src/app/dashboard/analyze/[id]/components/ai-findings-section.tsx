@@ -69,7 +69,61 @@ const AiFindingsSection = ({
     return relevantLines.map((l) => l.code).join("\n");
   };
 
-  const handleApply = (
+  type PatchOp = "replace" | "insert_before" | "insert_after" | "delete";
+  type FindingPatch = {
+    op: PatchOp;
+    start_line: number;
+    end_line: number;
+    replacement?: string;
+  };
+
+  const applyPatch = (patch: FindingPatch) => {
+    if (!finalCode) return;
+
+    const lines = finalCode.split("\n");
+    const startIndex = patch.start_line - 1;
+    const endIndex = patch.end_line - 1;
+
+    if (startIndex < 0 || endIndex < startIndex || endIndex >= lines.length) {
+      toast.warning("Auto-apply unavailable: patch line range is out of bounds.");
+      return;
+    }
+
+    const replacementLines =
+      typeof patch.replacement === "string" && patch.replacement.length > 0
+        ? patch.replacement.split("\n")
+        : [];
+
+    if (patch.op === "delete") {
+      lines.splice(startIndex, endIndex - startIndex + 1);
+      setFinalCode(lines.join("\n"));
+      toast.success("Fix applied successfully!");
+      return;
+    }
+
+    if (patch.op === "replace") {
+      lines.splice(startIndex, endIndex - startIndex + 1, ...replacementLines);
+      setFinalCode(lines.join("\n"));
+      toast.success("Fix applied successfully!");
+      return;
+    }
+
+    if (patch.op === "insert_before") {
+      lines.splice(startIndex, 0, ...replacementLines);
+      setFinalCode(lines.join("\n"));
+      toast.success("Fix applied successfully!");
+      return;
+    }
+
+    if (patch.op === "insert_after") {
+      lines.splice(endIndex + 1, 0, ...replacementLines);
+      setFinalCode(lines.join("\n"));
+      toast.success("Fix applied successfully!");
+      return;
+    }
+  };
+
+  const handleApplyLegacySuggestedCode = (
     lineStart: number,
     lineEnd: number,
     suggestedCode?: string,
@@ -84,6 +138,21 @@ const AiFindingsSection = ({
     const startIndex = lineStart - 1;
     const deleteCount = lineEnd - lineStart + 1;
 
+    const originalBlock = lines
+      .slice(startIndex, startIndex + deleteCount)
+      .join("\n");
+    const originalHasImport = /^\s*import\s+/m.test(originalBlock);
+    const suggestedHasImport = /^\s*import\s+/m.test(suggestedCode);
+
+    // Guardrail: jangan auto-replace import/pragma/contract header dengan snippet kecil.
+    // Ini mencegah kasus di mana suggested_code tidak sesuai range line yang dipilih.
+    if (originalHasImport && !suggestedHasImport) {
+      toast.warning(
+        "Auto-apply unavailable: this fix doesn’t include required imports. Please apply it manually.",
+      );
+      return;
+    }
+
     if (suggestedCode === "") {
       lines.splice(startIndex, deleteCount);
     } else {
@@ -91,9 +160,7 @@ const AiFindingsSection = ({
     }
 
     setFinalCode(lines.join("\n"));
-    toast.success(
-      suggestedCode === "" ? "Lines removed!" : "Fix applied successfully!",
-    );
+    toast.success(suggestedCode === "" ? "Lines removed!" : "Fix applied successfully!");
   };
 
   const displayedFindings = useMemo(() => {
@@ -110,12 +177,15 @@ const AiFindingsSection = ({
         line_start,
         line_end,
         reasoning_trace,
+        remediation,
         confidence,
       }) => {
         const snippet = getSnippet(line_start, line_end);
         const isMultiLine = line_end !== line_start;
-        const suggestedCode = (reasoning_trace as any)?.vulnerability
-          .suggested_code;
+        const patch = (remediation as any)?.patch as FindingPatch | undefined;
+        const suggestedCode =
+          (remediation as any)?.suggested_code ??
+          (reasoning_trace as any)?.vulnerability?.suggested_code;
 
         return (
           <div
@@ -209,7 +279,11 @@ const AiFindingsSection = ({
                 size="sm"
                 onClick={() => {
                   setChosenFindings((prev) => [...prev, uuid]);
-                  handleApply(line_start, line_end, suggestedCode);
+                  if (patch && typeof patch === "object") {
+                    applyPatch(patch);
+                  } else {
+                    handleApplyLegacySuggestedCode(line_start, line_end, suggestedCode);
+                  }
                 }}
               >
                 {suggestedCode === "" ? "Remove Lines" : "Apply Fix"}
