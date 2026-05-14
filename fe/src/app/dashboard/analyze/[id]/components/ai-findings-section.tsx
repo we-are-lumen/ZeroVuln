@@ -123,44 +123,14 @@ const AiFindingsSection = ({
     }
   };
 
-  const handleApplyLegacySuggestedCode = (
-    lineStart: number,
-    lineEnd: number,
-    suggestedCode?: string,
-  ) => {
-    if (typeof suggestedCode !== "string") {
-      toast.error("No suggested fix data available for this finding.");
-      return;
-    }
-    if (!finalCode) return;
-
-    const lines = finalCode.split("\n");
-    const startIndex = lineStart - 1;
-    const deleteCount = lineEnd - lineStart + 1;
-
-    const originalBlock = lines
-      .slice(startIndex, startIndex + deleteCount)
-      .join("\n");
-    const originalHasImport = /^\s*import\s+/m.test(originalBlock);
-    const suggestedHasImport = /^\s*import\s+/m.test(suggestedCode);
-
-    // Guardrail: jangan auto-replace import/pragma/contract header dengan snippet kecil.
-    // Ini mencegah kasus di mana suggested_code tidak sesuai range line yang dipilih.
-    if (originalHasImport && !suggestedHasImport) {
+  const handleApply = (patch?: FindingPatch) => {
+    if (!patch) {
       toast.warning(
-        "Auto-apply unavailable: this fix doesn’t include required imports. Please apply it manually.",
+        "Auto-apply unavailable: this finding doesn’t include a patch yet. Please re-run Analyze.",
       );
       return;
     }
-
-    if (suggestedCode === "") {
-      lines.splice(startIndex, deleteCount);
-    } else {
-      lines.splice(startIndex, deleteCount, suggestedCode);
-    }
-
-    setFinalCode(lines.join("\n"));
-    toast.success(suggestedCode === "" ? "Lines removed!" : "Fix applied successfully!");
+    applyPatch(patch);
   };
 
   const displayedFindings = useMemo(() => {
@@ -277,16 +247,18 @@ const AiFindingsSection = ({
               </Button>
               <Button
                 size="sm"
+                disabled={!patch}
                 onClick={() => {
                   setChosenFindings((prev) => [...prev, uuid]);
-                  if (patch && typeof patch === "object") {
-                    applyPatch(patch);
-                  } else {
-                    handleApplyLegacySuggestedCode(line_start, line_end, suggestedCode);
-                  }
+                  handleApply(patch);
                 }}
+                title={
+                  patch
+                    ? "Apply fix"
+                    : "Auto-apply needs patch data. Please re-run Analyze."
+                }
               >
-                {suggestedCode === "" ? "Remove Lines" : "Apply Fix"}
+                Apply Fix
               </Button>
             </div>
           </div>
