@@ -138,6 +138,33 @@ const AiFindingsSection = ({
     };
   };
 
+  const reindentBlock = (block: string, targetIndent: string) => {
+    const rawLines = block.replace(/\r\n/g, "\n").split("\n");
+    // trim outer empty lines
+    while (rawLines.length && rawLines[0].trim() === "") rawLines.shift();
+    while (rawLines.length && rawLines[rawLines.length - 1].trim() === "")
+      rawLines.pop();
+
+    // compute minimal indent from non-empty lines
+    const indents = rawLines
+      .filter((l) => l.trim() !== "")
+      .map((l) => (l.match(/^\s*/) || [""])[0]);
+    const minIndent =
+      indents.length === 0
+        ? ""
+        : indents.reduce((min, cur) => (cur.length < min.length ? cur : min));
+
+    return rawLines
+      .map((line) => {
+        if (line.trim() === "") return "";
+        const stripped = line.startsWith(minIndent)
+          ? line.slice(minIndent.length)
+          : line.trimStart();
+        return targetIndent + stripped;
+      })
+      .join("\n");
+  };
+
   const applyPatch = (patch: FindingPatch) => {
     if (!finalCode) return;
 
@@ -285,6 +312,11 @@ const AiFindingsSection = ({
       return;
     }
 
+    const originalFirstLine = finalCode
+      .slice(range.startIndex, range.endIndexExclusive)
+      .split("\n")[0];
+    const targetIndent = (originalFirstLine.match(/^\s*/) || [""])[0];
+
     // Basic sanity: replacement function braces must be balanced.
     const count = (s: string) => ({
       open: (s.match(/\{/g) || []).length,
@@ -298,9 +330,11 @@ const AiFindingsSection = ({
       return;
     }
 
+    const reindentedFn = reindentBlock(replacementFn, targetIndent);
+
     const nextCode =
       finalCode.slice(0, range.startIndex) +
-      replacementFn.trimEnd() +
+      reindentedFn.trimEnd() +
       "\n" +
       finalCode.slice(range.endIndexExclusive);
 
