@@ -56,7 +56,7 @@ export default function Home() {
               className="gap-2 text-mist-400 hover:text-white"
             >
               <HugeiconsIcon icon={Upload01Icon} size={18} fontWeight={2} />
-              <span>Upload FilOe</span>
+              <span>Upload File</span>
             </Button>
 
             <Button>
