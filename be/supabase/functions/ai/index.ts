@@ -323,6 +323,45 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
     if (existing.is_catalog) return badRequest('Cannot audit catalog contract via this endpoint');
     contractRowId = existing.id;
     contractUuid = existing.uuid;
+
+    // Re-audit: wipe previous audit findings + audit rows for this contract.
+    const { data: priorAudits, error: priorAuditsError } = await supabase
+      .from('audits')
+      .select('id')
+      .eq('contract_id', contractRowId)
+      .eq('kind', 'audit');
+    if (priorAuditsError) {
+      console.error('Failed to load prior audits:', priorAuditsError);
+      return serverError('Failed to reset previous audit');
+    }
+    if (priorAudits && priorAudits.length > 0) {
+      const priorAuditIds = priorAudits.map((a) => a.id);
+      const { error: delFindingsError } = await supabase
+        .from('ai_findings')
+        .delete()
+        .in('audit_id', priorAuditIds);
+      if (delFindingsError) {
+        console.error('Failed to delete prior ai_findings:', delFindingsError);
+        return serverError('Failed to reset previous audit findings');
+      }
+      const { error: delAuditsError } = await supabase
+        .from('audits')
+        .delete()
+        .in('id', priorAuditIds);
+      if (delAuditsError) {
+        console.error('Failed to delete prior audits:', delAuditsError);
+        return serverError('Failed to reset previous audits');
+      }
+    }
+
+    // Sync contract source_code with the new code being audited.
+    const { error: syncError } = await supabase
+      .from('contracts')
+      .update({ source_code: codeStringToSourceBlocks(code) })
+      .eq('id', contractRowId);
+    if (syncError) {
+      console.error('Failed to sync contract source_code:', syncError);
+    }
   } else {
     const { data: newContract, error: contractError } = await supabase
       .from('contracts')
