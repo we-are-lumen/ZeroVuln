@@ -34,7 +34,6 @@ fe/
 │   └── api/                # Backend API integration and types
 ├── public/                 # Static assets
 ├── next.config.ts          # Next.js configuration
-├── tailwind.config.js      # Tailwind CSS configuration
 └── components.json         # shadcn/ui configuration
 ```
 
@@ -59,7 +58,7 @@ sequenceDiagram
     FE->>Wallet: Request Ethereum Accounts
     Wallet-->>FE: Return Wallet Address (0x...)
     FE->>FE: Store Address in Context
-    
+
     User->>FE: Access Protected Route (/dashboard)
     FE->>BE: API Request + X-Wallet-Address Header
     BE->>BE: Resolve User / Check Admin Status
@@ -100,14 +99,14 @@ sequenceDiagram
     Auditor->>FE: Submit Finding (Line range, severity)
     FE->>BE: POST /auditor-findings
     BE-->>FE: Status: "submitted"
-    
+
     Admin->>Admin: Review Queue in /admin
     Admin->>BE: POST /admin/:uuid/approve
     BE->>BE: Update DB & Generate JSONL
     BE->>Contract: allocateReward()
     Contract-->>BE: Reward Allocated Event
     BE-->>Admin: Success
-    
+
     Note over Auditor, Contract: Auditor can now call claimReward() on-chain
 ```
 
@@ -119,8 +118,7 @@ sequenceDiagram
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) for rapid, utility-first styling.
 - **Components**: [shadcn/ui](https://ui.shadcn.com/) for accessible, customizable, and unstyled base components.
 - **Web3 Integration**: [ethers.js v6](https://docs.ethers.org/v6/) for interacting with the 0G Galileo Testnet and the `ZVContract`.
-- **State Management**: React Context APIs (`WalletProvider`) for global state like wallet connection.
-- **Icons**: Lucide React for consistent, crisp iconography.
+- **Icons**: Huge Icons for consistent, crisp iconography.
 
 ## 💻 Getting Started Locally
 
@@ -132,7 +130,7 @@ sequenceDiagram
    bun install
    ```
 3. **Set up environment variables**:
-   Create a `.env.local` file and add the required variables (see `.env` for examples).
+   Create a `.env` file and add the required variables (see `.env.example` for examples).
    ```env
    NEXT_PUBLIC_SUPABASE_URL=...
    NEXT_PUBLIC_SUPABASE_ANON_KEY=...
