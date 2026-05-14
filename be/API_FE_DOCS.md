@@ -391,6 +391,22 @@ Semua endpoint ini butuh user admin (`users.is_admin = true`).
 - Request body: none
 - Response: `{ id, uuid, wallet_address, is_admin, created_at, updated_at }`.
 
+### 4.9 Public Stats (Unauthenticated)
+
+#### `GET /public-stats`
+- Query params: none
+- Request body: none
+- Response (contoh):
+```json
+{
+  "total_reward_distributed": 5000,
+  "total_submitted_findings": 124,
+  "total_smart_contracts_secured": 42,
+  "total_active_auditors": 18
+}
+```
+- Endpoint ini **public**, tidak memerlukan header `Authorization` maupun `X-Wallet-Address`.
+
 ## 5) Polling Pattern (FE)
 
 Hanya berlaku untuk endpoint AI async:
@@ -708,4 +724,11 @@ curl -X POST "${BASE_URL}/admin/auditor-findings/${AUDITOR_FINDING_UUID}/reject"
 curl -X GET "${BASE_URL}/me" \
   -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
+```
+
+### 7.9 Public Stats
+
+#### GET /public-stats
+```bash
+curl -X GET "${BASE_URL}/public-stats"
 ```
