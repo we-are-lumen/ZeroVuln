@@ -12,7 +12,7 @@ module.exports = {
     },
   },
   paths: {
-    // Jangan pakai "." karena Hardhat akan ikut scan node_modules dan bisa kena HH1006
+    // Don't use "." — Hardhat would also scan node_modules and can hit HH1006
     sources: "contracts",
     tests: "test",
     cache: "cache",

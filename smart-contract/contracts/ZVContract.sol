@@ -3,13 +3,13 @@ pragma solidity ^0.8.20;
 
 /**
  * ZVContract
- * - Fee gate untuk fitur CodeGen & Analyze (0.1 0g per call)
- * - Admin bisa mengalokasikan reward ke submitter saat finding di-approve
- * - User bisa claim reward dari contract
+ * - Fee gate for the CodeGen & Analyze features (0.1 0g per call)
+ * - Admins can allocate rewards to a submitter when a finding is approved
+ * - Users can claim rewards from the contract
  *
- * Catatan:
- * - Contract ini pakai native token chain (diasumsikan 0g adalah native currency).
- * - Backend/FE bisa memverifikasi pembayaran/reward lewat event yang di-emit.
+ * Notes:
+ * - This contract uses the chain's native token (0g is assumed to be the native currency).
+ * - Backend/FE can verify payments and rewards via the emitted events.
  */
 contract ZVContract {
   // =========================
@@ -74,7 +74,7 @@ contract ZVContract {
     Analyze
   }
 
-  // Default: 0.1 0g (diasumsikan 18 decimals seperti Ether)
+  // Default: 0.1 0g (assumed to use 18 decimals, same as Ether)
   uint256 public featureFee = 0.1 ether;
 
   // Rewards
@@ -83,9 +83,9 @@ contract ZVContract {
   uint256 public totalOutstandingRewards;
 
   /**
-   * Reward per finding untuk catalog contract.
-   * - catalogId: bytes32 (rekomendasi: keccak256(bytes(<contract_catalog_uuid_string>))).
-   * - value: amount dalam wei (native token). 1 0g = 1e18 wei.
+   * Reward-per-finding for a catalog contract.
+   * - catalogId: bytes32 (recommended: keccak256(bytes(<contract_catalog_uuid_string>))).
+   * - value: amount in wei (native token). 1 0g = 1e18 wei.
    */
   mapping(bytes32 => uint256) public catalogRewardPerFinding;
 
@@ -132,8 +132,8 @@ contract ZVContract {
   }
 
   /**
-   * Owner withdraw sisa dana (misal fee revenue).
-   * Note: tetap menjaga outstanding rewards agar contract tetap solvable.
+   * Owner withdraws leftover funds (e.g. fee revenue).
+   * Note: preserves outstanding rewards so the contract remains solvent.
    */
   function ownerWithdraw(address payable to, uint256 amount)
     external
@@ -144,7 +144,7 @@ contract ZVContract {
     if (amount == 0) revert ZeroAmount();
 
     uint256 balance = address(this).balance;
-    // Jangan biarkan withdraw mengganggu kemampuan bayar rewards.
+    // Don't let withdrawals compromise the ability to pay out rewards.
     if (balance < totalOutstandingRewards + amount) {
       revert InsufficientContractBalance(totalOutstandingRewards + amount, balance);
     }
@@ -158,15 +158,15 @@ contract ZVContract {
   // Fee gate
   // =========================
   /**
-   * Bayar untuk menggunakan fitur (CodeGen / Analyze).
-   * refId opsional: bisa diisi contract_uuid / audit_uuid / request id.
-   * Jika user kirim > featureFee, contract akan refund kelebihan.
+   * Pay to use a feature (CodeGen / Analyze).
+   * refId is optional: can be contract_uuid / audit_uuid / request id.
+   * If msg.value > featureFee, the contract refunds the excess.
    */
   function payForFeature(Feature feature, bytes32 refId) external payable nonReentrant {
     uint256 fee = featureFee;
     if (msg.value < fee) revert InvalidFee(fee, msg.value);
 
-    // Refund kelebihan (kalau ada)
+    // Refund the excess (if any)
     uint256 change = msg.value - fee;
     if (change > 0) {
       (bool ok, ) = payable(msg.sender).call{ value: change }("");
@@ -184,7 +184,7 @@ contract ZVContract {
     if (amount == 0) revert ZeroAmount();
     if (rewardAllocated[findingId]) revert AlreadyAllocated(findingId);
 
-    // Ensure solvency: contract harus punya balance cukup untuk outstanding + amount baru
+    // Ensure solvency: contract balance must cover outstanding + the new amount
     uint256 balance = address(this).balance;
     uint256 required = totalOutstandingRewards + amount;
     if (balance < required) revert InsufficientContractBalance(required, balance);
@@ -197,8 +197,8 @@ contract ZVContract {
   }
 
   /**
-   * Dipanggil admin saat approve finding.
-   * findingId: sebaiknya hash dari auditor_finding_uuid (misal keccak256(uuidString)).
+   * Called by an admin when approving a finding.
+   * findingId: should be a hash of auditor_finding_uuid (e.g. keccak256(uuidString)).
    */
   function allocateReward(bytes32 findingId, address submitter, uint256 amount)
     external
@@ -208,8 +208,8 @@ contract ZVContract {
   }
 
   /**
-   * Versi reward yang ngikutin konfigurasi reward_per_finding dari catalog contract.
-   * catalogId: rekomendasi hash dari contract_catalog.uuid (keccak256(bytes(uuidString))).
+   * Reward variant that follows the reward_per_finding config from a catalog contract.
+   * catalogId: recommended to hash contract_catalog.uuid (keccak256(bytes(uuidString))).
    */
   function allocateRewardFromCatalog(bytes32 findingId, bytes32 catalogId, address submitter)
     external

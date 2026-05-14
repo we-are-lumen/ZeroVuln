@@ -4,7 +4,7 @@ async function main() {
   const [deployer] = await hre.ethers.getSigners();
   if (!deployer) {
     throw new Error(
-      "Deployer account tidak ditemukan. Pastikan PRIVATE_KEY sudah di-set (via .env atau environment variable)."
+      "Deployer account not found. Make sure PRIVATE_KEY is set (via .env or an environment variable)."
     );
   }
   console.log("Deploying with:", deployer.address);
