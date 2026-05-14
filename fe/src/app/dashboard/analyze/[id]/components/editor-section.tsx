@@ -20,10 +20,13 @@ import { toast } from "sonner";
 import useAnalyzeSmartContract from "../../hooks/use-analyze-smart-contract";
 import { AttackTraceModal } from "./attack-trace-modal";
 
-const toSolFilename = (name?: string | null) => {
+const normalizeContractLabel = (name?: string | null) => {
   const base = (name ?? "Contract").trim();
-  if (!base) return "Contract.sol";
-  return base.toLowerCase().endsWith(".sol") ? base : `${base}.sol`;
+  if (!base) return { title: "Contract", ext: ".sol" };
+  if (base.toLowerCase().endsWith(".sol")) {
+    return { title: base.slice(0, -4) || "Contract", ext: ".sol" };
+  }
+  return { title: base, ext: ".sol" };
 };
 
 const EditorSection = ({
@@ -118,12 +121,19 @@ const EditorSection = ({
     <section className="flex basis-[70%] flex-col overflow-hidden rounded-2xl border border-mist-800 bg-mist-900/50">
       <div className="flex items-center justify-between border-b border-mist-800 bg-mist-950/30 p-3">
         <div className="flex items-center gap-2">
-          <p className="font-mono text-sm font-medium text-zinc-400">
-            {data?.name}
-          </p>
-          <span className="rounded border border-mist-700 bg-mist-950/40 px-2 py-0.5 font-mono text-[10px] text-mist-400">
-            {toSolFilename(data?.name)}
-          </span>
+          {(() => {
+            const { title, ext } = normalizeContractLabel(data?.name);
+            return (
+              <>
+                <p className="font-mono text-sm font-medium text-zinc-400">
+                  {title}
+                </p>
+                <span className="rounded border border-mist-700 bg-mist-950/40 px-2 py-0.5 font-mono text-[10px] text-mist-400">
+                  {ext}
+                </span>
+              </>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-2">
           <Button size="icon-sm" variant="outline" onClick={handleCopy}>
