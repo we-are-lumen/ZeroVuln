@@ -31,18 +31,28 @@ The result is a self-improving security dataset that lives outside any single ve
 
 ## Architecture at a Glance
 
-```
-                ┌────────────────────────────────────┐
-   Wallet ─────▶│  Supabase Edge Functions (Deno)    │
-   (X-Wallet)   │  me · contracts · ai · audits · …  │
-                └────────────┬──────────────┬────────┘
-                             │              │
-                       ┌─────▼─────┐   ┌────▼──────────────┐
-                       │ Postgres  │   │   0G Network       │
-                       │ (RLS, svc │   │  • Compute Broker  │
-                       │  role)    │   │  • Storage Indexer │
-                       └───────────┘   │  • Chain (16602)   │
-                                       └────────────────────┘
+```mermaid
+graph TD
+    subgraph Client
+      Wallet["Wallet (X-Wallet)"]
+    end
+
+    subgraph "Supabase Cloud"
+      BE["Supabase Edge Functions (Deno)<br/>(me, contracts, ai, audits, ...)"]
+      DB[("Postgres DB<br/>(RLS & Service Role)")]
+    end
+
+    subgraph "0G Network"
+      Broker["0G Compute Broker"]
+      Storage["0G Storage Indexer"]
+      Chain["0G Chain (16602)"]
+    end
+
+    Wallet -- "HTTP (Auth Headers)" --> BE
+    BE -- "SQL Query" --> DB
+    BE -- "AI Inference" --> Broker
+    BE -- "Data Persistence" --> Storage
+    BE -- "Reward Logic" --> Chain
 ```
 
 | Layer        | Tech                                                |
@@ -138,18 +148,53 @@ Full request/response shapes and cURL examples live in [`API_FE_DOCS.md`](./API_
 
 ### AI Flow — Async + Polling
 
-```
-POST /ai-*  ─▶  audits row created (pending)
-            ─▶  job submitted to 0G Compute (running)
-            ─▶  202 { audit_id }
-                      │
-FE polls every 2-3s   ▼
-GET /audits/:uuid  ──▶ status: succeeded → ai_findings[] embedded
+```mermaid
+sequenceDiagram
+    participant FE as Frontend (Wallet)
+    participant BE as Supabase Edge Functions
+    participant OG as 0G Compute Broker
+
+    FE->>BE: POST /ai-* (prompt, contract_id)
+    BE->>BE: Create Audit Record (pending)
+    BE->>OG: Submit Inference Job
+    BE-->>FE: 202 Accepted { audit_id }
+
+    Note over FE, BE: Polling Period (every 2-3s)
+    
+    loop Polling
+        FE->>BE: GET /audits/:audit_uuid
+        BE-->>FE: { status: "running" }
+    end
+
+    OG-->>BE: [Milestone] Result Callback
+    BE->>BE: Update Audit (succeeded) + AI Findings
+
+    FE->>BE: GET /audits/:audit_uuid
+    BE-->>FE: { status: "succeeded", ai_findings: [...] }
 ```
 
 > The current `ai/index.ts` does not yet have a worker callback that writes 0G Compute results back to the DB. A callback bridge is the next milestone for `running → succeeded` transitions.
 
 ### Auditor → 0G Storage Flow
+
+```mermaid
+graph TD
+    User["Auditor (User)"] -- "POST /auditor-findings" --> BE["Supabase BE"]
+    BE -- "Save as 'submitted'" --> DB[(Postgres)]
+    
+    Admin["Admin"] -- "Review Queue" --> BE
+    BE -- "GET /admin/auditor-findings" --> DB
+    
+    Admin -- "Approve Finding" --> BE
+    BE -- "1. Set status: approved" --> DB
+    BE -- "2. Slice Code & Build JSONL" --> BE
+    BE -- "3. Upload Dataset" --> OG["0G Storage"]
+    OG -- "Return Hash/URI" --> BE
+    BE -- "4. Persist 0G Metadata" --> DB
+    
+    Admin -- "Reject Finding" --> BE
+    BE -- "Set status: rejected" --> DB
+```
 
 1. User `POST /auditor-findings` against a catalog contract (auto `review_status=submitted`).
 2. Admin reviews the queue via `GET /admin/auditor-findings`.
