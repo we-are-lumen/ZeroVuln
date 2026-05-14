@@ -1,12 +1,13 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { darcula } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 import { Button } from "@/shared/components/ui/button";
 import CodeSkeleton from "@/app/dashboard/audit/components/skeletons/code-skeleton";
+import { deploySolidityContractFromSource } from "@/shared/lib/solidity/deploy";
 import { CopyIcon, NeuralNetworkIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
@@ -16,6 +17,7 @@ const EditorSection = () => {
   const params = useParams();
   const contractId = params.id?.toString() ?? "";
   const { data, isLoading } = useQueryContractDetail(contractId);
+  const [isDeploying, setIsDeploying] = useState(false);
 
   const fullCode = useMemo(() => {
     return data?.source_code?.map((lineObj) => lineObj.code).join("\n") ?? "";
@@ -28,6 +30,34 @@ const EditorSection = () => {
       toast.success("Contract code copied to clipboard");
     } catch {
       toast.error("Failed to copy code");
+    }
+  };
+
+  const handleDeploy = async () => {
+    if (!fullCode) return;
+    if (isDeploying) return;
+
+    setIsDeploying(true);
+    try {
+      const deployPromise = deploySolidityContractFromSource(fullCode);
+      toast.promise(deployPromise, {
+        loading: "Compiling & deploying contract...",
+        success: "Deploy berhasil",
+        error: (err: unknown) => (err instanceof Error ? err.message : "Deploy gagal"),
+      });
+
+      const res = await deployPromise;
+
+      toast.success(
+        `Deployed: ${res.address.slice(0, 6)}...${res.address.slice(-4)}`,
+      );
+
+      // Best-effort copy address to clipboard
+      try {
+        await navigator.clipboard.writeText(res.address);
+      } catch {}
+    } finally {
+      setIsDeploying(false);
     }
   };
 
@@ -44,9 +74,14 @@ const EditorSection = () => {
             <HugeiconsIcon icon={CopyIcon} size={18} strokeWidth={2} />
           </Button>
 
-          <Button size="sm">
+          <Button
+            size="sm"
+            onClick={handleDeploy}
+            disabled={isLoading || !fullCode || isDeploying}
+            title={!fullCode ? "Tidak ada code untuk di-deploy" : "Deploy ke OG Galileo"}
+          >
             <HugeiconsIcon icon={NeuralNetworkIcon} size={18} strokeWidth={2} />
-            <span>Deploy</span>
+            <span>{isDeploying ? "Deploying..." : "Deploy"}</span>
           </Button>
         </div>
       </div>

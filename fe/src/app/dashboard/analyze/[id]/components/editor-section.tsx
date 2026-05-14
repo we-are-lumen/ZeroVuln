@@ -7,6 +7,7 @@ import { darcula } from "react-syntax-highlighter/dist/esm/styles/prism";
 import CodeSkeleton from "@/app/dashboard/audit/components/skeletons/code-skeleton";
 import useQueryContractDetail from "@/app/dashboard/code-gen/[id]/hooks/use-query-contract-detail";
 import { Button } from "@/shared/components/ui/button";
+import { deploySolidityContractFromSource } from "@/shared/lib/solidity/deploy";
 import { payForFeature } from "@/shared/lib/zv-contract";
 import {
   AnchorPointIcon,
@@ -32,6 +33,7 @@ const EditorSection = ({
   const { mutateAsync: analyze, isPending } = useAnalyzeSmartContract();
 
   const [isTraceModalOpen, setIsTraceModalOpen] = useState(false);
+  const [isDeploying, setIsDeploying] = useState(false);
 
   const latestTrace = data?.audits?.[0]?.ai_findings?.[0]?.attack_trace;
 
@@ -71,6 +73,33 @@ const EditorSection = ({
     } catch {}
   };
 
+  const handleDeploy = async () => {
+    if (!finalCode) return;
+    if (isDeploying) return;
+
+    setIsDeploying(true);
+    try {
+      const deployPromise = deploySolidityContractFromSource(finalCode);
+      toast.promise(deployPromise, {
+        loading: "Compiling & deploying contract...",
+        success: "Deploy berhasil",
+        error: (err: unknown) => (err instanceof Error ? err.message : "Deploy gagal"),
+      });
+
+      const res = await deployPromise;
+
+      toast.success(
+        `Deployed: ${res.address.slice(0, 6)}...${res.address.slice(-4)}`,
+      );
+
+      try {
+        await navigator.clipboard.writeText(res.address);
+      } catch {}
+    } finally {
+      setIsDeploying(false);
+    }
+  };
+
   return (
     <section className="flex basis-[70%] flex-col overflow-hidden rounded-2xl border border-mist-800 bg-mist-900/50">
       <div className="flex items-center justify-between border-b border-mist-800 bg-mist-950/30 p-3">
@@ -103,9 +132,14 @@ const EditorSection = ({
             <span>Reanalyze</span>
           </Button>
 
-          <Button size="sm">
+          <Button
+            size="sm"
+            onClick={handleDeploy}
+            disabled={isLoading || !finalCode || isDeploying}
+            title={!finalCode ? "Tidak ada code untuk di-deploy" : "Deploy ke OG Galileo"}
+          >
             <HugeiconsIcon icon={NeuralNetworkIcon} size={18} strokeWidth={2} />
-            <span>Deploy</span>
+            <span>{isDeploying ? "Deploying..." : "Deploy"}</span>
           </Button>
         </div>
       </div>
