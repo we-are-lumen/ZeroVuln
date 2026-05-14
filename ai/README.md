@@ -1,5 +1,4 @@
 <div align="center">
-  <img src="https://via.placeholder.com/150x150.png?text=ZeroVuln+AI" alt="ZeroVuln AI Logo" width="150"/>
   <h1>🛡️ ZeroVuln AI</h1>
   <p><strong>Next-Generation LLM Inference API for Smart Contract Security</strong></p>
 
