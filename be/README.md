@@ -80,7 +80,7 @@ be/
 │       ├── me/                    # GET /me — wallet profile + admin flag
 │       ├── contracts/             # User contracts CRUD (is_catalog=false)
 │       ├── contract_catalog/      # Public catalog + admin-only writes
-│       ├── ai/                    # Inference triggers: codegen | audit | auto-fix | gas-opt
+│       ├── ai/                    # Inference triggers: codegen | audit
 │       ├── audits/                # List + detail (polling target, embeds findings)
 │       ├── ai-findings/           # GET / PATCH AI finding status
 │       ├── auditor-findings/      # Human-contributed findings + submit flow
@@ -122,7 +122,7 @@ All public identifiers in the API are the `uuid` column. Internal FKs use `bigin
 | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `users`             | `uuid`, `wallet_address` (unique), `is_admin`                                                                                                                          |
 | `contracts`         | `uuid`, `owner_id`, `is_catalog`, `name`, `status`, `language`, `source_code jsonb[]`, `gas_estimate`, `reward_per_finding`, `expired_at`                              |
-| `audits`            | `uuid`, `contract_id`, `kind` (`codegen \| audit \| auto_fix \| gas_opt`), `status` (`pending \| running \| succeeded \| failed`), `summary`, `started_at`, `completed_at` |
+| `audits`            | `uuid`, `contract_id`, `kind` (`codegen \| audit`), `status` (`pending \| running \| succeeded \| failed`), `summary`, `started_at`, `completed_at` |
 | `ai_findings`       | `uuid`, `audit_id`, `severity`, `title`, `description`, `line_start/end`, `confidence`, `gas_saved`, `status`, `reasoning_trace`, `remediation`, `attack_trace`        |
 | `auditor_findings`  | `uuid`, `contributor_id`, `contract_id` (must be `is_catalog=true`, enforced by trigger), `review_status`, `submitted_at`, `decided_at`, `dataset_uri`, `dataset_hash` |
 
@@ -140,40 +140,31 @@ Full request/response shapes and cURL examples live in [`API_FE_DOCS.md`](./API_
 | User contracts        | `contracts`         | `GET / POST /contracts` · `GET / PATCH / DELETE /contracts/:uuid`                              |
 | Catalog (public)      | `contract_catalog`  | `GET /contract_catalog` · `GET /contract_catalog/:uuid`                                        |
 | Catalog (admin)       | `contract_catalog`  | `GET / POST /contract_catalog/admin` · `GET / PATCH /contract_catalog/admin/:uuid`             |
-| AI triggers           | `ai`                | `POST /ai-codegen` · `/ai-audit` · `/ai-auto-fix` · `/ai-gas-opt` → `202 { audit_id }`         |
+| AI triggers           | `ai`                | `POST /ai-codegen` · `/ai-audit` → `200 { audit_id, ... }`                                    |
 | Audits                | `audits`            | `GET /audits?contract_id=&status=` · `GET /audits/:uuid` (polling, embeds `ai_findings`)       |
 | AI findings           | `ai-findings`       | `GET / PATCH /ai-findings/:uuid`                                                               |
 | Auditor contributions | `auditor-findings`  | `GET / POST /auditor-findings` · `GET / PATCH /auditor-findings/:uuid` · `PATCH …/submit`      |
 | Admin review          | `admin`             | `GET /admin/auditor-findings?review_status=` · `POST …/:uuid/approve` \| `…/reject`            |
 
-### AI Flow — Async + Polling
+### AI Flow — Synchronous Execution
+
+All AI endpoints are **synchronous**. The handler waits for the AI inference service to complete, writes results to the database, and returns the data immediately.
 
 ```mermaid
 sequenceDiagram
     participant FE as Frontend (Wallet)
     participant BE as Supabase Edge Functions
-    participant OG as 0G Compute Broker
+    participant AI as AI Inference Service
 
     FE->>BE: POST /ai-* (prompt, contract_id)
     BE->>BE: Create Audit Record (pending)
-    BE->>OG: Submit Inference Job
-    BE-->>FE: 202 Accepted { audit_id }
-
-    Note over FE, BE: Polling Period (every 2-3s)
-    
-    loop Polling
-        FE->>BE: GET /audits/:audit_uuid
-        BE-->>FE: { status: "running" }
-    end
-
-    OG-->>BE: [Milestone] Result Callback
+    BE->>AI: Request Inference (codegen/audit)
+    AI-->>BE: Return Result (JSON)
     BE->>BE: Update Audit (succeeded) + AI Findings
-
-    FE->>BE: GET /audits/:audit_uuid
-    BE-->>FE: { status: "succeeded", ai_findings: [...] }
+    BE-->>FE: 200 OK { audit_id, findings, ... }
 ```
 
-> The current `ai/index.ts` does not yet have a worker callback that writes 0G Compute results back to the DB. A callback bridge is the next milestone for `running → succeeded` transitions.
+> Every AI request is synchronous to ensure immediate feedback within the developer's workflow.
 
 ### Auditor → 0G Storage Flow
 
@@ -278,7 +269,7 @@ supabase db push
 Every function deploys to its own slug at `/functions/v1/<name>`. Inside each `index.ts`, the path after the function name is used for manual routing:
 
 - `contracts/:uuid` → handler reads segment index 4 from `/functions/v1/contracts/<uuid>`.
-- `ai/index.ts` routes on `pathParts[functionIndex + 2]` (`ai-codegen | ai-audit | …`). Because Supabase has no native path multiplexing, the `ai` function is also deployed under the slugs `ai-codegen`, `ai-audit`, `ai-auto-fix`, and `ai-gas-opt` (or rewritten on the FE) so the segment is always present.
+- `ai/index.ts` routes on `pathParts[functionIndex + 2]` (`ai-codegen | ai-audit`). Because Supabase has no native path multiplexing, the `ai` function is also deployed under the slugs `ai-codegen` and `ai-audit` (or rewritten on the FE) so the segment is always present.
 
 ---
 

@@ -167,9 +167,9 @@ General error return format:
 
 ### 4.3 AI Trigger
 
-All AI endpoints below are **synchronous** (not polling). The handler waits for a response from the AI inference service, then writes to the DB before responding.
+All AI endpoints below are **synchronous**. The handler waits for a response from the AI inference service, writes the results to the database, and then responds with the data immediately.
 
-General response: status `200` with a payload containing `audit_id`, `contract_id`, and parsing results.
+General response: status `200` with a payload containing `audit_id`, `contract_id`, and findings/code.
 
 #### `POST /ai-codegen`
 - Query params: none
@@ -239,34 +239,6 @@ General response: status `200` with a payload containing `audit_id`, `contract_i
 ```
 - Findings are stored in the `ai_findings` table (not `auditor_findings`).
 
-#### `POST /ai-auto-fix`
-- Query params: none
-- Request body:
-```json
-{
-  "ai_finding_id": "<ai_finding_uuid>"
-}
-```
-- Required fields:
-  - `ai_finding_id: string`
-- Behavior:
-  - Creates a new audit of kind=`auto_fix` for the same contract.
-  - Submits a compute job to 0G (async on the 0G side), updates the audit to `running`, and marks `ai_finding.status = 'fixed'`.
-- Response: `202` with body `{ "audit_id": "<audit_uuid>" }`.
-
-#### `POST /ai-gas-opt`
-- Query params: none
-- Request body:
-```json
-{
-  "contract_id": "<contract_uuid>"
-}
-```
-- Required fields:
-  - `contract_id: string` (UUID of a contract owned by the user, not a catalog contract)
-- Behavior:
-  - Creates a new audit of kind=`gas_opt`, submits a compute job to 0G, and updates the audit to `running`.
-- Response: `202` with body `{ "audit_id": "<audit_uuid>" }`.
 
 ### 4.4 Audits
 
@@ -281,8 +253,7 @@ General response: status `200` with a payload containing `audit_id`, `contract_i
 - Query params: none
 - Request body: none
 - Notes:
-  - For async endpoints (`ai-auto-fix`, `ai-gas-opt`), use polling until `status` becomes `succeeded` or `failed`.
-  - For `ai-codegen` & `ai-audit`, the handler sets `succeeded`/`failed` before responding — polling is usually not necessary.
+  - All AI endpoints are synchronous, so polling is not required. The result is returned directly in the trigger response.
   - Response includes `ai_findings`.
 
 ### 4.5 AI Findings
@@ -407,15 +378,9 @@ All these endpoints require an admin user (`users.is_admin = true`).
 ```
 - This endpoint is **public**, and does not require `Authorization` or `X-Wallet-Address` headers.
 
-## 5) Polling Pattern (FE)
+## 5) AI Flow (Synchronous)
 
-Only applies to async AI endpoints:
-
-1. Call `/ai-auto-fix` or `/ai-gas-opt` → receive `audit_id` (status `202`).
-2. Poll `GET /audits/:audit_uuid` every 2–3 seconds.
-3. Stop when `status` is `succeeded` or `failed`.
-
-`/ai-codegen` and `/ai-audit` are synchronous — they provide the results directly in the response (status `200`).
+All AI requests (`codegen`, `audit`) follow a simple Request/Response pattern. The client waits for the response, which includes the `audit_id` and the generated results.
 
 ## 6) cURL Template
 
