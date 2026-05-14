@@ -20,7 +20,11 @@ import { toast } from "sonner";
 import useAnalyzeSmartContract from "../../hooks/use-analyze-smart-contract";
 import { AttackTraceModal } from "./attack-trace-modal";
 
-const SOURCE_FILENAME = "Contract.sol";
+const toSolFilename = (name?: string | null) => {
+  const base = (name ?? "Contract").trim();
+  if (!base) return "Contract.sol";
+  return base.toLowerCase().endsWith(".sol") ? base : `${base}.sol`;
+};
 
 const EditorSection = ({
   finalCode,
@@ -118,7 +122,7 @@ const EditorSection = ({
             {data?.name}
           </p>
           <span className="rounded border border-mist-700 bg-mist-950/40 px-2 py-0.5 font-mono text-[10px] text-mist-400">
-            {SOURCE_FILENAME}
+            {toSolFilename(data?.name)}
           </span>
         </div>
         <div className="flex items-center gap-2">
