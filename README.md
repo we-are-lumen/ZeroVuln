@@ -109,9 +109,16 @@ New Data Upload               : 100%|██████████████�
 
 ## 📂 Core Architecture & Repository Structure
 
-- `scripts/` - Execution scripts for 0G Storage data pull, 0G Compute integration, model merging, and HF deployment.
-- `ai/` - Production-ready Inference API (FastAPI) to serve the fine-tuned security models.
-- `be/` - Backend infrastructure and serverless logic powering the application.
+ZeroVuln is built as a complete, end-to-end decentralized ecosystem. Below is the breakdown of our architecture. **We highly encourage judges to click into each module's documentation for deep dives, technical diagrams, and detailed flows!**
+
+| Module | Purpose | Tech Stack | Documentation |
+| :--- | :--- | :--- | :--- |
+| **🎨 [Frontend (fe/)](./fe)** | The decentralized dashboard for users to audit contracts and for human auditors to review vulnerabilities. | Next.js 15, Tailwind, ethers.js | [Read `fe/README.md`](./fe/README.md) |
+| **⚙️ [Backend (be/)](./be)** | Serverless infrastructure handling auth, DB state, and API endpoints. | Deno, Supabase Edge Functions | [Read `be/README.md`](./be/README.md) |
+| **🔗 [Smart Contract (smart-contract/)](./smart-contract)** | The on-chain settlement layer on 0G Galileo. Handles pay-per-use fees and auditor bounties. | Solidity, Hardhat | [Read `smart-contract/README.md`](./smart-contract/README.md) |
+| **🤖 [Training Pipeline (scripts/)](./scripts)** | Orchestrates verified findings from 0G Storage → 0G Compute fine-tuning → HuggingFace. | Node.js, Python, 0G CLI | [Read `scripts/README.md`](./scripts/README.md) |
+| **🧠 [AI API (ai/)](./ai)** | Production-ready FastAPI inference engine serving our fine-tuned smart contract security models. | Python, FastAPI, HuggingFace | [Read `ai/README.md`](./ai/README.md) |
+
 
 ## 🐳 AI Inference Docker Workflow
 
@@ -145,10 +152,7 @@ docker run --rm -p 8000:8000 \
 
 ---
 
-## 📚 Documentation References
 
-- [`ai/README.md`](./ai/README.md) - Deep dive into our AI architecture, metrics, and competitive advantage (highly recommended for judges).
-- `ai/Dockerfile` - Runtime image setup for model fetching and inference.
 
 ## ⚠️ Important Notes
 
