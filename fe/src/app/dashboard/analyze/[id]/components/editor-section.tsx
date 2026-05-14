@@ -34,6 +34,7 @@ const EditorSection = ({
 
   const [isTraceModalOpen, setIsTraceModalOpen] = useState(false);
   const [isDeploying, setIsDeploying] = useState(false);
+  const [isPaying, setIsPaying] = useState(false);
 
   const latestTrace = data?.audits?.[0]?.ai_findings?.[0]?.attack_trace;
 
@@ -48,29 +49,36 @@ const EditorSection = ({
   };
 
   const handleAnalyze = async () => {
+    if (!finalCode) return;
+    if (isPaying || isPending) return;
+
+    setIsPaying(true);
     try {
-      await toast.promise(payForFeature("Analyze", `analyze:${Date.now()}`), {
+      const paymentPromise = payForFeature("Analyze", `analyze:${Date.now()}`);
+      toast.promise(paymentPromise, {
         loading: "Processing payment of 0.1 0g...",
         success: () => "Payment sucessful",
         error: (err: unknown) =>
           err instanceof Error ? err.message : "Payment failed",
       });
 
-      await toast.promise(
-        analyze({ code: finalCode, contract_id: contractId }),
-        {
-          loading: "Analyzing smart contract...",
-          success: () => {
-            refetch();
-            return "Analysis complete";
-          },
-          error: (err: unknown) =>
-            err instanceof Error
-              ? err.message
-              : "Failed analyzing smart contract",
-        },
-      );
-    } catch {}
+      await paymentPromise;
+
+      const analyzePromise = analyze({ code: finalCode, contract_id: contractId });
+      toast.promise(analyzePromise, {
+        loading: "Analyzing smart contract...",
+        success: () => "Analysis complete",
+        error: (err: unknown) =>
+          err instanceof Error ? err.message : "Failed analyzing smart contract",
+      });
+
+      await analyzePromise;
+      refetch();
+    } catch {
+      // noop - toast.promise already surfaces errors
+    } finally {
+      setIsPaying(false);
+    }
   };
 
   const handleDeploy = async () => {
@@ -126,7 +134,7 @@ const EditorSection = ({
           <Button
             size="sm"
             variant="outline"
-            disabled={isPending}
+            disabled={isPending || isPaying}
             onClick={handleAnalyze}
           >
             <span>Reanalyze</span>
