@@ -111,12 +111,10 @@ const DashboardPage = () => {
       </div>
       {data && data.length === 0 && renderEmptyFallback()}
 
-      {data && data.length > 0 && (
-        <section className="grid grid-cols-4 gap-3">
-          {isLoading && renderSkeleton()}
-          {!isLoading && renderCards()}
-        </section>
-      )}
+      <section className="grid grid-cols-4 gap-3">
+        {isLoading && renderSkeleton()}
+        {!isLoading && renderCards()}
+      </section>
     </main>
   );
 };
