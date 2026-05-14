@@ -74,22 +74,26 @@ const AiFindingsSection = ({
     lineEnd: number,
     suggestedCode?: string,
   ) => {
-    if (!suggestedCode) {
-      toast.error("No suggested code available for this finding.");
+    if (typeof suggestedCode !== "string") {
+      toast.error("No suggested fix data available for this finding.");
       return;
     }
     if (!finalCode) return;
 
     const lines = finalCode.split("\n");
-
     const startIndex = lineStart - 1;
-    const endIndex = lineEnd - 1;
-    const deleteCount = endIndex - startIndex + 1;
+    const deleteCount = lineEnd - lineStart + 1;
 
-    lines.splice(startIndex, deleteCount, suggestedCode);
+    if (suggestedCode === "") {
+      lines.splice(startIndex, deleteCount);
+    } else {
+      lines.splice(startIndex, deleteCount, suggestedCode);
+    }
 
     setFinalCode(lines.join("\n"));
-    toast.success("Fix applied successfully!");
+    toast.success(
+      suggestedCode === "" ? "Lines removed!" : "Fix applied successfully!",
+    );
   };
 
   const displayedFindings = useMemo(() => {
@@ -105,12 +109,13 @@ const AiFindingsSection = ({
         severity,
         line_start,
         line_end,
-        remediation,
+        reasoning_trace,
         confidence,
       }) => {
         const snippet = getSnippet(line_start, line_end);
         const isMultiLine = line_end !== line_start;
-        const suggestedCode = (remediation as any)?.suggested_code;
+        const suggestedCode = (reasoning_trace as any)?.vulnerability
+          .suggested_code;
 
         return (
           <div
@@ -200,16 +205,14 @@ const AiFindingsSection = ({
               >
                 Dismiss
               </Button>
-              {/* 4. Attach the handleApply function */}
               <Button
                 size="sm"
                 onClick={() => {
                   setChosenFindings((prev) => [...prev, uuid]);
                   handleApply(line_start, line_end, suggestedCode);
                 }}
-                disabled={!suggestedCode} // Disable if no fix is provided
               >
-                Apply Fix
+                {suggestedCode === "" ? "Remove Lines" : "Apply Fix"}
               </Button>
             </div>
           </div>
