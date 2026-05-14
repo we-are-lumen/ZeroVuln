@@ -95,8 +95,6 @@ const AdminDashboardPage = () => {
   const [inspectedFinding, setInspectedFinding] = useState<any | null>(null);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
 
-  console.log("asdsa");
-
   const handleExecuteAction = async () => {
     if (!confirmAction) return;
 
