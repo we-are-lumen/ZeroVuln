@@ -102,7 +102,7 @@ export default function Home() {
           />
           <StatItem
             icon={UserGroup02Icon}
-            label="Active AI Auditors"
+            label="Active Auditors"
             value={data?.total_active_auditors ?? 0}
           />
         </div>
