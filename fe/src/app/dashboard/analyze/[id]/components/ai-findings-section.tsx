@@ -125,6 +125,13 @@ const AiFindingsSection = ({
         );
         return;
       }
+      const expected = patch.end_line - patch.start_line + 1;
+      if (replacementLines.length !== expected) {
+        toast.warning(
+          "Auto-apply unavailable: replacement block does not match the patch range. Please re-run Analyze.",
+        );
+        return;
+      }
       lines.splice(startIndex, endIndex - startIndex + 1, ...replacementLines);
       setFinalCode(lines.join("\n"));
       toast.success("Fix applied successfully!");
