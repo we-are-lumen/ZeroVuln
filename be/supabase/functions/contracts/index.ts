@@ -64,7 +64,7 @@ async function handleGetContract(auth: { user_id: number; is_admin: boolean }, i
       uuid, name, source_code, owner_id, is_catalog, status, gas_estimate, language, reward_per_finding, expired_at, created_at, updated_at,
       audits(
         uuid, status, kind, summary, started_at, completed_at, created_at,
-        ai_findings(uuid, severity, title, description, line_start, line_end, confidence, gas_saved, status, reasoning_trace, remediation, created_at)
+        ai_findings(uuid, severity, title, description, line_start, line_end, confidence, gas_saved, status, reasoning_trace, remediation, attack_trace, created_at)
       )
     `)
     .eq('uuid', id)
