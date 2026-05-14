@@ -32,7 +32,9 @@ import {
 import { Badge } from "@/shared/components/ui/badge";
 
 function codeToSourceCode(code: string): Array<{ line: number; code: string }> {
-  return code.split(/\r?\n/).map((line, idx) => ({ line: idx + 1, code: line }));
+  return code
+    .split(/\r?\n/)
+    .map((line, idx) => ({ line: idx + 1, code: line }));
 }
 
 function sourceCodeToText(source_code?: Array<{ line: number; code: string }>) {
@@ -127,7 +129,9 @@ export default function AdminContractCatalogPage() {
             return "Catalog contract berhasil dibuat.";
           },
           error: (err: unknown) =>
-            err instanceof Error ? err.message : "Gagal membuat catalog contract.",
+            err instanceof Error
+              ? err.message
+              : "Gagal membuat catalog contract.",
         },
       );
       return;
@@ -164,9 +168,11 @@ export default function AdminContractCatalogPage() {
     <main className="flex h-full flex-col space-y-6 p-6">
       <div className="flex items-center justify-between border-b pb-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Contract Catalog</h1>
+          <h1 className="text-2xl font-bold tracking-tight">
+            Contract Catalog
+          </h1>
           <p className="text-sm text-mist-500">
-            Kelola target contract catalog dan reward_per_finding.
+            Manage target contract catalog and reward per finding.
           </p>
         </div>
         <Button onClick={openCreate}>Tambah</Button>
@@ -220,7 +226,7 @@ export default function AdminContractCatalogPage() {
                   <TableCell className="capitalize">{c.language}</TableCell>
                   <TableCell>
                     <Badge variant="outline" className="tabular-nums">
-                      {(c.reward_per_finding ?? 0).toLocaleString()} 0g
+                      {(c.reward_per_finding ?? 0).toLocaleString()} 0G
                     </Badge>
                   </TableCell>
                   <TableCell className="text-mist-300">
@@ -255,7 +261,9 @@ export default function AdminContractCatalogPage() {
         <DialogContent className="sm:max-w-[760px]">
           <DialogHeader>
             <DialogTitle>
-              {mode === "create" ? "Tambah Catalog Contract" : "Edit Catalog Contract"}
+              {mode === "create"
+                ? "Tambah Catalog Contract"
+                : "Edit Catalog Contract"}
             </DialogTitle>
           </DialogHeader>
 
@@ -304,7 +312,11 @@ export default function AdminContractCatalogPage() {
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={() => setOpen(false)} disabled={isMutating}>
+            <Button
+              variant="outline"
+              onClick={() => setOpen(false)}
+              disabled={isMutating}
+            >
               Batal
             </Button>
             <Button onClick={handleSubmit} disabled={isMutating}>
@@ -316,4 +328,3 @@ export default function AdminContractCatalogPage() {
     </main>
   );
 }
-

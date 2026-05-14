@@ -222,7 +222,10 @@ const AdminDashboardPage = () => {
                     open={!!inspectedFinding}
                     onOpenChange={(open) => !open && setInspectedFinding(null)}
                   >
-                    <DialogContent className="flex max-h-[80vh] w-fit flex-col">
+                    <DialogContent
+                      aria-describedby=""
+                      className="flex max-h-[80vh] w-fit flex-col"
+                    >
                       <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                           <span>{inspectedFinding?.title}</span>

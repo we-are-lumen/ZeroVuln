@@ -1,7 +1,10 @@
 "use client";
 
 import useQueryMeProfile from "./hooks/use-query-me-profile";
-import { useClaimZvReward, useQueryZvClaimableReward } from "./hooks/use-zv-reward";
+import {
+  useClaimZvReward,
+  useQueryZvClaimableReward,
+} from "./hooks/use-zv-reward";
 import truncateWallet from "@/shared/lib/helpers/trucateWalletAddress";
 import formatRelativeTime from "@/shared/lib/helpers/formatRelativeTime";
 import { Badge } from "@/shared/components/ui/badge";
@@ -68,7 +71,10 @@ const ProfilePage = () => {
 
   const findings = data?.auditor_findings ?? [];
   const totalFindings = findings.length;
-  const totalReward = findings.reduce((sum, f) => sum + (f.reward_amount ?? 0), 0);
+  const totalReward = findings.reduce(
+    (sum, f) => sum + (f.reward_amount ?? 0),
+    0,
+  );
 
   const statusCount = findings.reduce<Record<string, number>>((acc, f) => {
     const key = (f.review_status || "unknown").toLowerCase();
@@ -90,7 +96,7 @@ const ProfilePage = () => {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Profile</h1>
           <p className="text-sm text-mist-500">
-            Ringkasan akun dan kontribusi kamu.
+            The overview of your account and contribution.
           </p>
         </div>
       </div>
@@ -101,12 +107,12 @@ const ProfilePage = () => {
         </div>
       ) : isError ? (
         <div className="rounded-xl border border-destructive/40 bg-destructive/10 p-6 text-sm text-destructive">
-          Gagal load profile:{" "}
+          Profile failed to lead:{" "}
           {error instanceof Error ? error.message : "Unknown error"}
         </div>
       ) : !data ? (
         <div className="rounded-xl border bg-mist-900/50 p-6 text-sm text-mist-400">
-          Data profile tidak ditemukan.
+          Profile not found.
         </div>
       ) : (
         <div className="space-y-6">
@@ -114,7 +120,7 @@ const ProfilePage = () => {
             <Card className="border bg-mist-900/50 backdrop-blur-sm">
               <CardHeader className="border-b">
                 <CardTitle>Account</CardTitle>
-                <CardDescription>Informasi akun kamu.</CardDescription>
+                <CardDescription>Your account information.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="flex items-center justify-between gap-3">
@@ -140,7 +146,7 @@ const ProfilePage = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-mist-400">Account age</span>
                   <span className="text-xs text-mist-200">
-                    {formatRelativeTime(data.created_at)} yang lalu
+                    {formatRelativeTime(data.created_at)} ago
                   </span>
                 </div>
                 <div className="flex items-center justify-between">
@@ -155,9 +161,7 @@ const ProfilePage = () => {
             <Card className="border bg-mist-900/50 backdrop-blur-sm">
               <CardHeader className="border-b">
                 <CardTitle>Contributions</CardTitle>
-                <CardDescription>
-                  Ringkasan kontribusi finding kamu.
-                </CardDescription>
+                <CardDescription>Summary of your findings.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 <div className="grid grid-cols-2 gap-3">
@@ -168,7 +172,7 @@ const ProfilePage = () => {
                   <div className="rounded-lg border border-mist-800 bg-mist-950/40 p-3">
                     <p className="text-xs text-mist-400">Total reward</p>
                     <p className="text-xl font-bold tabular-nums">
-                      {totalReward.toLocaleString()} 0g
+                      {totalReward.toLocaleString()} 0G
                     </p>
                   </div>
                 </div>
@@ -194,7 +198,7 @@ const ProfilePage = () => {
             <CardHeader className="border-b">
               <CardTitle>Rewards (On-chain)</CardTitle>
               <CardDescription>
-                Reward yang bisa kamu claim dari ZVContract.
+                Claimable reward from ZVContract.
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -206,10 +210,12 @@ const ProfilePage = () => {
                   <p className="text-sm text-destructive">
                     {claimableError instanceof Error
                       ? claimableError.message
-                      : "Gagal load claimable reward."}
+                      : "Failed to load claimable reward."}
                   </p>
                 ) : (
-                  <p className="text-xl font-bold tabular-nums">{claimable0g} 0g</p>
+                  <p className="text-xl font-bold tabular-nums">
+                    {claimable0g} 0G
+                  </p>
                 )}
               </div>
 
@@ -217,10 +223,12 @@ const ProfilePage = () => {
                 onClick={async () => {
                   try {
                     await toast.promise(claim(), {
-                      loading: "Mengirim transaksi claim...",
-                      success: () => "Claim berhasil.",
+                      loading: "Sending claim transaction...",
+                      success: () => "Reward claimed successfuly.",
                       error: (err: unknown) =>
-                        err instanceof Error ? err.message : "Claim gagal.",
+                        err instanceof Error
+                          ? err.message
+                          : "Failed to claim reward.",
                     });
                   } catch {
                     // toast handle
@@ -242,9 +250,9 @@ const ProfilePage = () => {
 
           <Card className="border bg-mist-900/50 backdrop-blur-sm">
             <CardHeader className="border-b">
-              <CardTitle>Aktivitas terbaru</CardTitle>
+              <CardTitle>Latest Activities</CardTitle>
               <CardDescription>
-                Menampilkan {latestFindings.length} temuan terbaru.
+                SHowing {latestFindings.length} new findings.
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -272,8 +280,8 @@ const ProfilePage = () => {
                             <span className="text-[10px] text-mist-400">
                               Contract ID: {f.contract_id ?? "-"} ·{" "}
                               {f.submitted_at
-                                ? `Dikirim ${formatRelativeTime(f.submitted_at)} yang lalu`
-                                : `Dibuat ${formatRelativeTime(f.created_at)} yang lalu`}
+                                ? `Sent ${formatRelativeTime(f.submitted_at)} ago`
+                                : `Created ${formatRelativeTime(f.created_at)} ago`}
                             </span>
                           </div>
                         </TableCell>
@@ -291,12 +299,12 @@ const ProfilePage = () => {
                         <TableCell className="align-top">
                           <Badge
                             variant="outline"
-                            className="capitalize text-[10px]"
+                            className="text-[10px] capitalize"
                           >
                             {f.review_status}
                           </Badge>
                         </TableCell>
-                        <TableCell className="align-top text-right tabular-nums">
+                        <TableCell className="text-right align-top tabular-nums">
                           {(f.reward_amount ?? 0)
                             ? `${f.reward_amount?.toLocaleString()} 0g`
                             : "-"}
@@ -309,7 +317,7 @@ const ProfilePage = () => {
                         colSpan={4}
                         className="h-24 text-center text-muted-foreground italic"
                       >
-                        Belum ada finding.
+                        No findings yet.
                       </TableCell>
                     </TableRow>
                   )}
