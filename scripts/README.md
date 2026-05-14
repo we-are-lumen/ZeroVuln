@@ -314,6 +314,6 @@ The `merged/` folder is what gets uploaded to `https://huggingface.co/<HF_REPO_I
 
 <div align="center">
 
-Built for the **0G Hackathon** · Closing the loop between human auditors and AI
+Closing the Loop: Human-in-the-Loop AI Security · Powered by 0G Storage & Compute
 
 </div>

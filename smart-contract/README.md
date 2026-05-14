@@ -153,6 +153,6 @@ smart-contract/
 
 <div align="center">
 
-Built for the **0G Hackathon** · The trust anchor between AI and human auditors
+The Trust Anchor for Decentralized AI Security · Bridge between AI and human auditors
 
 </div>

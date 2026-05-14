@@ -301,6 +301,6 @@ Every error response follows this shape:
 
 <div align="center">
 
-Built for the **0G Hackathon** · Powered by **Supabase + 0G Network**
+Decentralized AI Security Infrastructure · Powered by **Supabase + 0G Network**
 
 </div>
