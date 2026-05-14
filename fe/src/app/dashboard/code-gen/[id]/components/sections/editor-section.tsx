@@ -29,6 +29,9 @@ const formatHash = (hash?: string | null) => {
   return `${hash.slice(0, 8)}...${hash.slice(-4)}`;
 };
 
+const explorerAddressUrl = (address: string) =>
+  `https://chainscan-galileo.0g.ai/address/${address}`;
+
 const EditorSection = () => {
   const params = useParams();
   const contractId = params.id?.toString() ?? "";
@@ -78,7 +81,8 @@ const EditorSection = () => {
         try {
           await contractService.updateContract(contractId, {
             status: "deployed",
-            hash_sc: res.txHash ?? null,
+            // store deployed contract address
+            hash_sc: res.address ?? null,
           });
           refetch();
         } catch (e) {
@@ -95,9 +99,9 @@ const EditorSection = () => {
     if (!data?.hash_sc) return;
     try {
       await navigator.clipboard.writeText(data.hash_sc);
-      toast.success("Transaction hash copied to clipboard");
+      toast.success("Contract address copied to clipboard");
     } catch {
-      toast.error("Failed to copy transaction hash");
+      toast.error("Failed to copy contract address");
     }
   };
 
@@ -116,16 +120,22 @@ const EditorSection = () => {
                   {ext}
                 </span>
                 {data?.status === "deployed" && (
-                  <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-medium text-emerald-300">
+                  <a
+                    href={data?.hash_sc ? explorerAddressUrl(data.hash_sc) : undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/15"
+                    title="Open in explorer"
+                  >
                     deployed
-                  </span>
+                  </a>
                 )}
                 {data?.hash_sc && (
                   <button
                     type="button"
                     onClick={handleCopyHash}
                     className="rounded border border-mist-700 bg-mist-950/40 px-2 py-0.5 font-mono text-[10px] text-mist-400 hover:text-mist-200"
-                    title="Copy transaction hash"
+                    title="Copy contract address"
                   >
                     {formatHash(data.hash_sc)}
                   </button>
