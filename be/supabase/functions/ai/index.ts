@@ -283,18 +283,26 @@ function normalizeCodegenMitigations(
   const maxItems = 8;
   const out: CodegenMitigation[] = [];
 
+  const toInt = (v: unknown): number | null => {
+    if (typeof v === 'number' && Number.isFinite(v)) return Math.trunc(v);
+    if (typeof v === 'string') {
+      const n = Number.parseInt(v, 10);
+      return Number.isFinite(n) ? n : null;
+    }
+    return null;
+  };
+
   for (const m of mitigations) {
     if (!m || typeof m !== 'object') continue;
     const mm = m as Record<string, unknown>;
     const name = typeof mm.name === 'string' ? mm.name.trim() : '';
     const reason = typeof mm.reason === 'string' ? mm.reason.trim() : '';
-    const start = mm.start_line;
-    const end = mm.end_line;
+    const start = toInt(mm.start_line);
+    const end = toInt(mm.end_line);
     const excerpt = typeof mm.excerpt === 'string' ? mm.excerpt : undefined;
 
     if (!name || !reason) continue;
-    if (typeof start !== 'number' || typeof end !== 'number') continue;
-    if (!Number.isInteger(start) || !Number.isInteger(end)) continue;
+    if (start === null || end === null) continue;
     if (start < 1 || end < start || end > codeLines.length) continue;
 
     // Keep ranges reasonably small to avoid noisy/incorrect broad claims.
@@ -420,8 +428,9 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
         .insert({
           audit_id: audit.id,
           severity: 'info',
-          title: 'Generated Smart Contract',
-          description: `Generated code:\n\n${generatedCode}`,
+          title: 'Mitigations unavailable',
+          description:
+            'AI did not return valid vulnerability mitigations for this generated contract.',
           status: 'open',
         });
 
