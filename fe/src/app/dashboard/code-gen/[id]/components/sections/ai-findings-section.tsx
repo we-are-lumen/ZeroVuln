@@ -124,7 +124,7 @@ const AiFindingsSection = () => {
           <h3 className="text-sm font-bold">AI MITIGATIONS</h3>
         </div>
       </div>
-      <div className="space-y-3 p-3">
+      <div className="h-full space-y-3 overflow-y-auto p-3">
         {isLoading && renderSkeleton()}
         {!isLoading && renderCards()}
       </div>

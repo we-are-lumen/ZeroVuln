@@ -4,20 +4,27 @@ import BrandLogo from "@/shared/components/ui/brand-logo";
 import { Button } from "@/shared/components/ui/button";
 import { Textarea } from "@/shared/components/ui/textarea";
 import {
+  Bug02Icon,
   CheckmarkCircle04Icon,
   CreditCardPosIcon,
   DiscordIcon,
   GithubIcon,
   Orbit01Icon,
+  Shield01Icon,
   SparklesIcon,
   TwitterIcon,
   Upload01Icon,
+  UserGroup02Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, IconSvgElement } from "@hugeicons/react";
 import Image from "next/image";
 import LandingNavbar from "./components/landing-navbar";
+import useQueryPublicStats from "./hooks/use-query-public-stats";
+import StatItem from "./components/stat-item";
 
 export default function Home() {
+  const { data } = useQueryPublicStats();
+
   return (
     <main>
       <LandingNavbar />
@@ -27,7 +34,7 @@ export default function Home() {
         </div>
         <div className="absolute bottom-0 h-44 w-full bg-linear-to-t from-background to-transparent"></div>
         <h2 className="text-6xl font-black uppercase">
-          Smart contract copilot that <br />{" "}
+          Smart contract copilot <br /> that{" "}
           <span className="text-primary">signs every line.</span>
         </h2>
         <p className="max-w-[60vw] text-lg text-mist-400">
@@ -66,7 +73,41 @@ export default function Home() {
           </div>
         </div>
       </section>
-      <section className="space-y-10 px-20 py-20">
+      <section className="px-20 py-24">
+        <div className="mx-auto max-w-[70vw] space-y-4 text-center">
+          <h2 className="text-5xl font-bold uppercase">
+            The Pulse of <span className="text-primary">Network Security</span>
+          </h2>
+          <p className="text-lg text-mist-400">
+            ZeroVuln is more than just a copilot. It’s a thriving decentralized
+            ecosystem. <br /> To date, we have distributed a{" "}
+            <span className="font-bold text-white">
+              whopping total reward of{" "}
+              {data?.total_reward_distributed?.toLocaleString() ?? "0"} 0G
+            </span>{" "}
+            to our contributors, fueling a new era of tamper-evident code.
+          </p>
+        </div>
+
+        <div className="grid grid-cols-3 gap-12 border-mist-800/50 pt-16">
+          <StatItem
+            icon={Bug02Icon}
+            label="Submitted Findings"
+            value={data?.total_submitted_findings ?? 0}
+          />
+          <StatItem
+            icon={Shield01Icon}
+            label="Contracts Secured"
+            value={data?.total_smart_contracts_secured ?? 0}
+          />
+          <StatItem
+            icon={UserGroup02Icon}
+            label="Active AI Auditors"
+            value={data?.total_active_auditors ?? 0}
+          />
+        </div>
+      </section>
+      <section className="mt-10 space-y-10 px-20 py-20">
         <div className="mx-auto max-w-[60vw] space-y-2 text-center">
           <h2 className="text-5xl font-bold">
             PROVEN <span className="text-primary">INTEGRITY</span> AT EVERY LINE

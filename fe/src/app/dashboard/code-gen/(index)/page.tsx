@@ -11,10 +11,21 @@ import { useGenerateSmartContract } from "./hooks/use-generate-smart-contract";
 import { ChangeEvent, useState, KeyboardEvent, useRef, useEffect } from "react";
 import { payForFeature } from "@/shared/lib/zv-contract";
 import { useMutation } from "@tanstack/react-query";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/shared/components/ui/alert-dialog";
 
 const CodeGenPage = () => {
   const router = useRouter();
   const [prompt, setPrompt] = useState("");
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const { mutateAsync: generate, isPending } = useGenerateSmartContract();
@@ -33,7 +44,7 @@ const CodeGenPage = () => {
   const { mutate: pay, isPending: isPaying } = useMutation({
     mutationFn: () => payForFeature("CodeGen", `codegen:${Date.now()}`),
     onMutate: () => {
-      toast.loading("Processing payment of 0.1 0g...", { id: "pay-toast" });
+      toast.loading("Processing payment", { id: "pay-toast" });
     },
     onSuccess: () => {
       toast.success("Pembayaran berhasil.", { id: "pay-toast" });
@@ -58,12 +69,16 @@ const CodeGenPage = () => {
     },
   });
 
-  const handleGenerate = async () => {
+  const handleGenerate = () => {
     if (prompt.trim().length <= 1) {
       toast.error("Please provide a more detailed description.");
       return;
     }
+    setIsConfirmOpen(true);
+  };
 
+  const handleConfirmPay = () => {
+    setIsConfirmOpen(false);
     pay();
   };
 
@@ -111,6 +126,30 @@ const CodeGenPage = () => {
             {isPending || isPaying ? "Generating..." : "Generate"}
           </Button>
         </div>
+
+        <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+          <AlertDialogContent className="border-mist-800 bg-mist-950 text-white">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Transaction</AlertDialogTitle>
+              <AlertDialogDescription className="text-mist-400">
+                Generating this smart contract requires a network fee of
+                <span className="font-bold text-primary"> 0.1 0g</span>. Please
+                confirm you want to proceed with the payment.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-mist-800 bg-transparent hover:bg-mist-900 hover:text-white">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmPay}
+                className="bg-primary hover:bg-primary/90"
+              >
+                Confirm & Pay
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </section>
     </main>
   );
