@@ -394,7 +394,7 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
     const { data: inserted, error: findingError } = await supabase
       .from('ai_findings')
       .insert(findings)
-      .select('uuid, severity, title, description, line_start, line_end, confidence, status, attack_trace');
+      .select('uuid, severity, title, description, line_start, line_end, confidence, status, attack_trace, remediation');
 
     if (findingError) {
       console.error('Failed to insert ai_findings:', findingError);
