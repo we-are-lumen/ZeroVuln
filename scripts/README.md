@@ -22,10 +22,11 @@ Standalone CLI scripts that close the loop between auditor contributions and a c
 
 ZeroVuln's audit data is curated by humans, persisted on **0G Storage**, and recycled into the AI auditor itself. This folder is the pipeline that makes that loop real:
 
-```
-Supabase                 0G Storage             0G Compute              HuggingFace
-auditor_findings   ──▶   download JSONL   ──▶   LoRA fine-tune    ──▶   merged model
-(approved)               root hash / 0g://      Qwen2.5 / Qwen3         org/repo
+```mermaid
+graph LR
+    A[Supabase<br/>auditor_findings] -- "Approved" --> B[0G Storage<br/>JSONL Datasets]
+    B -- "Fine-tuning" --> C[0G Compute<br/>LoRA Adapters]
+    C -- "Merge" --> D[HuggingFace<br/>Merged Model]
 ```
 
 One command (`npm run pull-and-fine-tune`) drives the whole sequence end-to-end. The orchestration lives in TypeScript; the merge + push step is a small Python helper that uses `peft` + `huggingface_hub`.
@@ -36,32 +37,24 @@ One command (`npm run pull-and-fine-tune`) drives the whole sequence end-to-end.
 
 ## Pipeline at a Glance
 
-```
-┌────────────────────┐  approved findings  ┌──────────────────────┐
-│  Supabase (DB)     │ ──────────────────▶ │ pull-datasets-       │
-│  auditor_findings  │   { dataset_uri }   │ from-0g.ts           │
-└────────────────────┘                     └──────────┬───────────┘
-                                                      │
-                                  ┌───────────────────┘
-                                  ▼
-                       ┌────────────────────┐
-                       │ 0G Storage Indexer │ ── download → datasets/from_0g.jsonl
-                       └────────┬───────────┘
-                                │  (--fine-tune)
-                                ▼
-                  ┌────────────────────────────┐
-                  │ 0g-compute-cli fine-tuning │ create-task → poll → ack → decrypt
-                  └────────────┬───────────────┘
-                               │  task-<id>.zip (LoRA adapter)
-                               ▼
-                  ┌──────────────────────────┐
-                  │ merge_and_push.py        │ unzip → merge_and_unload → push
-                  └────────────┬─────────────┘
-                               ▼
-                       ╔═══════════════════╗
-                       ║  huggingface.co/  ║
-                       ║  <org>/<repo>     ║
-                       ╚═══════════════════╝
+```mermaid
+graph TD
+    subgraph Source
+      DB["Supabase (DB)<br/>auditor_findings"] -- "{ dataset_uri }" --> Orchestrator["pull-datasets-from-0g.ts"]
+    end
+
+    subgraph "0G Infrastructure"
+      Orchestrator -- "Download" --> Storage["0G Storage Indexer"]
+      Storage -- "from_0g.jsonl" --> Compute["0G Compute CLI<br/>(Fine-tuning)"]
+    end
+
+    subgraph "Model Loop"
+      Compute -- "task-<id>.zip" --> Merge["merge_and_push.py<br/>(LoRA Merge)"]
+    end
+
+    subgraph Registry
+      Merge -- "Push" --> HF["HuggingFace Hub<br/>(Merged Model)"]
+    end
 ```
 
 ---
@@ -173,6 +166,35 @@ npm run pull-and-fine-tune -- \
 ```
 
 What happens, step by step:
+
+```mermaid
+sequenceDiagram
+    participant TS as Orchestrator (TS)
+    participant DB as Supabase
+    participant OG as 0G Storage
+    participant CL as 0G Compute CLI
+    participant PY as Python Helper
+    participant HF as HuggingFace
+
+    TS->>DB: 1. Query approved findings
+    DB-->>TS: Dataset URIs
+    TS->>OG: 2. Download from root hashes
+    OG-->>TS: JSONL data
+    TS->>TS: 3. Aggregate to datasets/from_0g.jsonl
+    TS->>CL: 4. Create fine-tuning task
+    loop Status Polling
+        TS->>CL: 5. get-task (every 15s)
+        CL-->>TS: Status: Queued/Running/Delivered
+    end
+    TS->>CL: 6. acknowledge-model (download encrypted)
+    loop Decrypt Polling
+        TS->>CL: 7. get-task until Finished
+        CL-->>TS: Status: Finished
+    end
+    TS->>CL: Decrypt artifact (task.zip)
+    TS->>PY: 8. Merge LoRA & Push
+    PY->>HF: Upload merged model
+```
 
 1. **Query Supabase** — newest `limit` approved `auditor_findings` with non-null `dataset_uri`.
 2. **Download from 0G Storage** — root-hash entries via the SDK indexer, legacy `0g://…` paths via HTTP.

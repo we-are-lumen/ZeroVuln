@@ -30,28 +30,20 @@ ZeroVuln isn't only AI — it's a **bounty economy** for smart-contract security
 
 ## The Flow
 
-```
-   ┌──────────────────┐  pays 0.1 0g   ┌──────────────────┐
-   │   End user (FE)  │ ─────────────▶ │   ZVContract     │
-   │  CodeGen/Analyze │   payForFeature│   (fee gate)     │
-   └──────────────────┘                └────────┬─────────┘
-                                                │  emits FeaturePaid
-                                                ▼
-                                       ┌──────────────────┐
-                                       │  BE confirms     │
-                                       │  & runs AI job   │
-                                       └──────────────────┘
+```mermaid
+graph TD
+    subgraph "Feature Access (Pay-per-use)"
+      User["End User (FE)"] -- "payForFeature (0.1 0G)" --> ZV["ZVContract (Fee Gate)"]
+      ZV -- "emits FeaturePaid" --> BE["Backend"]
+      BE -- "Confirm & Run AI Job" --> AI["AI Service"]
+    end
 
-   ┌──────────────────┐  approve       ┌──────────────────┐
-   │  Admin (BE)      │ ─────────────▶ │   ZVContract     │
-   │  finding review  │ allocateReward │  claimableRewards│
-   └──────────────────┘                └────────┬─────────┘
-                                                │  emits RewardAllocated
-                                                ▼
-                                       ┌──────────────────┐
-                                       │  Auditor claims  │
-                                       │  claimReward()   │
-                                       └──────────────────┘
+    subgraph "Audit Bounty (Incentive Loop)"
+      Admin["Admin (BE)"] -- "allocateReward / approve" --> ZV
+      ZV -- "emits RewardAllocated" --> Auditor["Auditor (User)"]
+      Auditor -- "claimReward()" --> ZV
+      ZV -- "Transfer Native 0G" --> Auditor
+    end
 ```
 
 ---
