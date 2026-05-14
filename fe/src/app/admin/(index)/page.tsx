@@ -218,80 +218,6 @@ const AdminDashboardPage = () => {
                     </Button>
                   </TableCell>
 
-                  <Dialog
-                    open={!!inspectedFinding}
-                    onOpenChange={(open) => !open && setInspectedFinding(null)}
-                  >
-                    <DialogContent
-                      aria-describedby=""
-                      className="flex max-h-[80vh] w-fit flex-col"
-                    >
-                      <DialogHeader>
-                        <DialogTitle className="flex items-center gap-2">
-                          <span>{inspectedFinding?.title}</span>
-                        </DialogTitle>
-                      </DialogHeader>
-
-                      <div className="space-y-2">
-                        <div className="text-mist-400">
-                          <span className="font-semibold text-primary capitalize">
-                            {finding.severity}
-                          </span>{" "}
-                          · Line{" "}
-                          <span className="font-semibold text-primary">
-                            {inspectedFinding?.line_start}{" "}
-                            {inspectedFinding?.line_start !==
-                            inspectedFinding?.line_end
-                              ? `- ${inspectedFinding?.line_end}`
-                              : null}
-                          </span>
-                        </div>
-
-                        <p className="text-mist-400">{finding.description}</p>
-                      </div>
-
-                      <div className="relative w-[50vw] grow overflow-auto rounded-md border border-mist-800 bg-zinc-950">
-                        <div className="sticky top-0 z-10 border-b border-mist-800 bg-zinc-900 px-4 py-2 font-mono text-xs text-mist-400">
-                          {inspectedFinding?.contracts?.name}
-                        </div>
-
-                        <SyntaxHighlighter
-                          language="solidity"
-                          style={darcula}
-                          showLineNumbers={true}
-                          wrapLines={true}
-                          lineProps={(lineNumber) => {
-                            const isVulnerable =
-                              lineNumber >= inspectedFinding?.line_start &&
-                              lineNumber <= inspectedFinding?.line_end;
-
-                            return {
-                              style: {
-                                display: "block",
-                                backgroundColor: isVulnerable
-                                  ? "rgba(244, 63, 94, 0.15)"
-                                  : "transparent",
-                                borderLeft: isVulnerable
-                                  ? "4px solid #f43f5e"
-                                  : "4px solid transparent",
-                              },
-                            };
-                          }}
-                          customStyle={{
-                            margin: 0,
-                            padding: "1rem 0",
-                            fontSize: "13px",
-                            background: "transparent",
-                          }}
-                        >
-                          {getFormattedCode(
-                            inspectedFinding?.contracts?.source_code,
-                          )}
-                        </SyntaxHighlighter>
-                      </div>
-                    </DialogContent>
-                  </Dialog>
-
                   <TableCell className="font-mono text-xs">
                     {truncateWallet(finding.users?.wallet_address)}
                   </TableCell>
@@ -377,6 +303,77 @@ const AdminDashboardPage = () => {
           </TableBody>
         </Table>
       </div>
+
+      <Dialog
+        open={!!inspectedFinding}
+        onOpenChange={(open) => !open && setInspectedFinding(null)}
+      >
+        <DialogContent
+          aria-describedby=""
+          className="flex max-h-[80vh] w-fit flex-col"
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <span>{inspectedFinding?.title}</span>
+            </DialogTitle>
+          </DialogHeader>
+
+          <div className="space-y-2">
+            <div className="text-mist-400">
+              <span className="font-semibold text-primary capitalize">
+                {inspectedFinding?.severity}
+              </span>{" "}
+              · Line{" "}
+              <span className="font-semibold text-primary">
+                {inspectedFinding?.line_start}{" "}
+                {inspectedFinding?.line_start !== inspectedFinding?.line_end
+                  ? `- ${inspectedFinding?.line_end}`
+                  : null}
+              </span>
+            </div>
+
+            <p className="text-mist-400">{inspectedFinding?.description}</p>
+          </div>
+
+          <div className="relative w-[50vw] grow overflow-auto rounded-md border border-mist-800 bg-zinc-950">
+            <div className="sticky top-0 z-10 border-b border-mist-800 bg-zinc-900 px-4 py-2 font-mono text-xs text-mist-400">
+              {inspectedFinding?.contracts?.name}
+            </div>
+
+            <SyntaxHighlighter
+              language="solidity"
+              style={darcula}
+              showLineNumbers={true}
+              wrapLines={true}
+              lineProps={(lineNumber) => {
+                const isVulnerable =
+                  lineNumber >= inspectedFinding?.line_start &&
+                  lineNumber <= inspectedFinding?.line_end;
+
+                return {
+                  style: {
+                    display: "block",
+                    backgroundColor: isVulnerable
+                      ? "rgba(244, 63, 94, 0.15)"
+                      : "transparent",
+                    borderLeft: isVulnerable
+                      ? "4px solid #f43f5e"
+                      : "4px solid transparent",
+                  },
+                };
+              }}
+              customStyle={{
+                margin: 0,
+                padding: "1rem 0",
+                fontSize: "13px",
+                background: "transparent",
+              }}
+            >
+              {getFormattedCode(inspectedFinding?.contracts?.source_code)}
+            </SyntaxHighlighter>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog
         open={!!confirmAction}
