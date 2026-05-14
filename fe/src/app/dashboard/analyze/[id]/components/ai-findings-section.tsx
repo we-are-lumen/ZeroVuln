@@ -1,5 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-import { PackageOpenIcon, Shield02Icon } from "@hugeicons/core-free-icons";
+import {
+  PackageOpenIcon,
+  Shield02Icon,
+  SparklesIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
@@ -65,7 +69,6 @@ const AiFindingsSection = ({
     return relevantLines.map((l) => l.code).join("\n");
   };
 
-  // 3. The Apply Logic
   const handleApply = (
     lineStart: number,
     lineEnd: number,
@@ -77,18 +80,14 @@ const AiFindingsSection = ({
     }
     if (!finalCode) return;
 
-    // Split the current editable code into an array of lines
     const lines = finalCode.split("\n");
 
-    // Convert 1-based line numbers to 0-based array indices
     const startIndex = lineStart - 1;
     const endIndex = lineEnd - 1;
     const deleteCount = endIndex - startIndex + 1;
 
-    // Remove the vulnerable lines and insert the suggested code
     lines.splice(startIndex, deleteCount, suggestedCode);
 
-    // Join back into a string and update the parent state
     setFinalCode(lines.join("\n"));
     toast.success("Fix applied successfully!");
   };
@@ -99,7 +98,6 @@ const AiFindingsSection = ({
 
   const renderCards = () =>
     displayedFindings.map(
-      // Ensure we destructure remediation from the finding
       ({
         uuid,
         title,
@@ -108,10 +106,10 @@ const AiFindingsSection = ({
         line_start,
         line_end,
         remediation,
+        confidence,
       }) => {
         const snippet = getSnippet(line_start, line_end);
         const isMultiLine = line_end !== line_start;
-        // Extract the suggested code safely
         const suggestedCode = (remediation as any)?.suggested_code;
 
         return (
@@ -120,9 +118,7 @@ const AiFindingsSection = ({
             className={cn("space-y-3 rounded-lg border border-mist-800 p-3")}
           >
             <div className="flex items-center justify-between gap-2">
-              <h4 className="line-clamp-1 text-sm leading-tight font-semibold">
-                {title}
-              </h4>
+              <h4 className="line-clamp-1 text-sm font-semibold">{title}</h4>
               <div className="space-x-2">
                 <Badge
                   className={cn(
@@ -140,6 +136,10 @@ const AiFindingsSection = ({
                 <span className="text-mist-400">Line</span>{" "}
                 <span className="font-semibold text-primary">
                   {line_start} {isMultiLine ? `- ${line_end}` : null}
+                </span>
+                <span className="text-mist-400"> · Confidence </span>
+                <span className="font-semibold text-primary">
+                  {confidence ? confidence / 100 : 0}%
                 </span>
               </p>
             </div>
@@ -165,7 +165,34 @@ const AiFindingsSection = ({
               </SyntaxHighlighter>
             </div>
 
-            <div className="mt-3 flex justify-end gap-2">
+            <div className="space-y-2">
+              <div className="flex items-center gap-1 text-primary">
+                <HugeiconsIcon icon={SparklesIcon} size={14} strokeWidth={2} />
+
+                <h5 className="line-clamp-1 text-xs font-medium">
+                  Suggested Fix
+                </h5>
+              </div>
+
+              <div className="border border-primary">
+                <SyntaxHighlighter
+                  language="solidity"
+                  style={darcula}
+                  showLineNumbers
+                  startingLineNumber={line_start}
+                  customStyle={{
+                    margin: 0,
+                    padding: "0.5rem",
+                    fontSize: "10px",
+                    background: "rgba(0,0,0,0.3)",
+                  }}
+                >
+                  {suggestedCode}
+                </SyntaxHighlighter>
+              </div>
+            </div>
+
+            <div className="mt-5 flex justify-end gap-2">
               <Button
                 size="sm"
                 variant="outline"
@@ -206,7 +233,7 @@ const AiFindingsSection = ({
       <div className="border-b border-mist-800 p-3">
         <div className="flex items-center gap-2 text-mist-400">
           <HugeiconsIcon icon={Shield02Icon} size={20} strokeWidth={2} />
-          <h3 className="text-sm font-bold tracking-widest">AI FINDINGS</h3>
+          <h3 className="text-sm font-bold">AI FINDINGS</h3>
         </div>
       </div>
       <div className="custom-scrollbar h-full space-y-3 overflow-y-auto p-3">

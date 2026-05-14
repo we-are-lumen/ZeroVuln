@@ -3,6 +3,31 @@ export type ContractCode = {
     line: number
 }
 
+export interface AttackTraceNode {
+    id: string;
+    type: "Contract" | "Function" | "EOA" | string;
+    label: string;
+    address: string;
+}
+export interface AttackTraceEdge {
+    from: string;
+    to: string;
+    action: string;
+    status: "re-entrant" | "success" | "reverted" | string;
+}
+
+export interface AttackTraceMetadata {
+    confidence: number;
+    blockNumber: number;
+    vulnerability: string;
+}
+export interface AttackTrace {
+    traceId: string;
+    nodes: AttackTraceNode[];
+    edges: AttackTraceEdge[];
+    metadata: AttackTraceMetadata;
+}
+
 export type AiMitigation = {
     name: string;
     reason: string;
@@ -25,6 +50,7 @@ export type AiFinding = {
     reasoning_trace: {
         mitigation: AiMitigation;
     };
+    attack_trace: AttackTrace
 }
 
 export type ContractAudit = {

@@ -8,10 +8,16 @@ import CodeSkeleton from "@/app/dashboard/audit/components/skeletons/code-skelet
 import useQueryContractDetail from "@/app/dashboard/code-gen/[id]/hooks/use-query-contract-detail";
 import { Button } from "@/shared/components/ui/button";
 import { payForFeature } from "@/shared/lib/zv-contract";
-import { CopyIcon, NeuralNetworkIcon } from "@hugeicons/core-free-icons";
+import {
+  AnchorPointIcon,
+  CopyIcon,
+  NeuralNetworkIcon,
+} from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
+import { useState } from "react";
 import { toast } from "sonner";
 import useAnalyzeSmartContract from "../../hooks/use-analyze-smart-contract";
+import { AttackTraceModal } from "./attack-trace-modal";
 
 const EditorSection = ({
   finalCode,
@@ -24,6 +30,10 @@ const EditorSection = ({
   const contractId = params.id?.toString() ?? "";
   const { data, refetch } = useQueryContractDetail(contractId);
   const { mutateAsync: analyze, isPending } = useAnalyzeSmartContract();
+
+  const [isTraceModalOpen, setIsTraceModalOpen] = useState(false);
+
+  const latestTrace = data?.audits?.[0]?.ai_findings?.[0]?.attack_trace;
 
   const handleCopy = async () => {
     if (!finalCode) return;
@@ -75,6 +85,16 @@ const EditorSection = ({
           </Button>
 
           <Button
+            size="icon-sm"
+            variant="outline"
+            disabled={!latestTrace}
+            onClick={() => setIsTraceModalOpen(true)}
+            title="View Attack Trace"
+          >
+            <HugeiconsIcon icon={AnchorPointIcon} size={18} strokeWidth={2} />
+          </Button>
+
+          <Button
             size="sm"
             variant="outline"
             disabled={isPending}
@@ -89,6 +109,12 @@ const EditorSection = ({
           </Button>
         </div>
       </div>
+
+      <AttackTraceModal
+        isOpen={isTraceModalOpen}
+        onClose={setIsTraceModalOpen}
+        traceData={latestTrace}
+      />
 
       <div className="custom-scrollbar flex-1 grow overflow-auto bg-transparent p-2">
         {isLoading && <CodeSkeleton totalLines={20} />}
