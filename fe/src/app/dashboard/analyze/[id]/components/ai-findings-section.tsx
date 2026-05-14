@@ -89,6 +89,23 @@ const AiFindingsSection = ({
       return;
     }
 
+    // Extra guardrails (penting untuk findings lama yang mungkin masih punya patch salah).
+    if (patch.op === "delete" && patch.end_line !== patch.start_line) {
+      toast.warning(
+        "Auto-apply unavailable: unsafe delete patch (multi-line). Please re-run Analyze.",
+      );
+      return;
+    }
+    if (
+      (patch.op === "insert_before" || patch.op === "insert_after") &&
+      patch.end_line !== patch.start_line
+    ) {
+      toast.warning(
+        "Auto-apply unavailable: invalid insert patch range. Please re-run Analyze.",
+      );
+      return;
+    }
+
     const replacementLines =
       typeof patch.replacement === "string" && patch.replacement.length > 0
         ? patch.replacement.split("\n")
@@ -102,6 +119,12 @@ const AiFindingsSection = ({
     }
 
     if (patch.op === "replace") {
+      if (replacementLines.length === 0) {
+        toast.warning(
+          "Auto-apply unavailable: empty replacement for a replace patch. Please re-run Analyze.",
+        );
+        return;
+      }
       lines.splice(startIndex, endIndex - startIndex + 1, ...replacementLines);
       setFinalCode(lines.join("\n"));
       toast.success("Fix applied successfully!");
@@ -109,6 +132,12 @@ const AiFindingsSection = ({
     }
 
     if (patch.op === "insert_before") {
+      if (replacementLines.length === 0) {
+        toast.warning(
+          "Auto-apply unavailable: empty replacement for an insert patch. Please re-run Analyze.",
+        );
+        return;
+      }
       lines.splice(startIndex, 0, ...replacementLines);
       setFinalCode(lines.join("\n"));
       toast.success("Fix applied successfully!");
@@ -116,6 +145,12 @@ const AiFindingsSection = ({
     }
 
     if (patch.op === "insert_after") {
+      if (replacementLines.length === 0) {
+        toast.warning(
+          "Auto-apply unavailable: empty replacement for an insert patch. Please re-run Analyze.",
+        );
+        return;
+      }
       lines.splice(endIndex + 1, 0, ...replacementLines);
       setFinalCode(lines.join("\n"));
       toast.success("Fix applied successfully!");
@@ -156,6 +191,15 @@ const AiFindingsSection = ({
         const suggestedCode =
           (remediation as any)?.suggested_code ??
           (reasoning_trace as any)?.vulnerability?.suggested_code;
+
+        const patchRangeLabel = patch
+          ? `${patch.op} lines ${patch.start_line}-${patch.end_line}`
+          : null;
+        const patchDisplayStart = patch?.start_line ?? line_start;
+        const patchDisplayBody =
+          patch?.op === "delete"
+            ? getSnippet(patch.start_line, patch.end_line)
+            : patch?.replacement ?? suggestedCode ?? "";
 
         return (
           <div
@@ -217,6 +261,11 @@ const AiFindingsSection = ({
                 <h5 className="line-clamp-1 text-xs font-medium">
                   Suggested Fix
                 </h5>
+                {patchRangeLabel && (
+                  <span className="ml-1 text-[10px] font-medium text-mist-400">
+                    ({patchRangeLabel})
+                  </span>
+                )}
               </div>
 
               <div className="border border-primary">
@@ -224,7 +273,7 @@ const AiFindingsSection = ({
                   language="solidity"
                   style={darcula}
                   showLineNumbers
-                  startingLineNumber={line_start}
+                  startingLineNumber={patchDisplayStart}
                   customStyle={{
                     margin: 0,
                     padding: "0.5rem",
@@ -232,7 +281,7 @@ const AiFindingsSection = ({
                     background: "rgba(0,0,0,0.3)",
                   }}
                 >
-                  {suggestedCode}
+                  {patchDisplayBody}
                 </SyntaxHighlighter>
               </div>
             </div>

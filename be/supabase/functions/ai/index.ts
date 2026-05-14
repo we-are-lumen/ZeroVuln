@@ -459,7 +459,9 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
       if (nameErr) console.error('Failed to update contract name:', nameErr);
     }
     const findings = parsed.vulnerabilities.length > 0
-      ? parsed.vulnerabilities.map((v) => ({
+      ? parsed.vulnerabilities.map((v) => {
+          const patch = normalizePatch(v.patch);
+          return ({
           audit_id: audit.id,
           severity: normalizeSeverity(v.severity),
           title: v.name || 'Security Finding',
@@ -469,13 +471,14 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
           confidence: typeof v.confidence === 'number' ? v.confidence : null,
           status: 'open',
           reasoning_trace: { vulnerability: v },
-          remediation: v.patch
-            ? { patch: v.patch }
+          remediation: patch
+            ? { patch }
             : v.suggested_code
               ? { suggested_code: v.suggested_code }
               : null,
           attack_trace: v.attack_trace ?? null,
-        }))
+        });
+      })
       : [{
           audit_id: audit.id,
           severity: 'info',
@@ -523,6 +526,53 @@ function normalizeSeverity(value: unknown): string {
   const valid = ['critical', 'high', 'medium', 'low', 'info'];
   if (typeof value === 'string' && valid.includes(value.toLowerCase())) return value.toLowerCase();
   return 'medium';
+}
+
+type FindingPatchOp = 'replace' | 'insert_before' | 'insert_after' | 'delete';
+type FindingPatch = {
+  op: FindingPatchOp;
+  start_line: number;
+  end_line: number;
+  replacement?: string;
+};
+
+function normalizePatch(value: unknown): FindingPatch | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+
+  const op = v.op;
+  if (
+    op !== 'replace' &&
+    op !== 'insert_before' &&
+    op !== 'insert_after' &&
+    op !== 'delete'
+  ) {
+    return null;
+  }
+
+  const start = v.start_line;
+  const end = v.end_line;
+  if (typeof start !== 'number' || typeof end !== 'number') return null;
+  if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
+  if (start < 1 || end < start) return null;
+
+  const replacement = typeof v.replacement === 'string' ? v.replacement : '';
+
+  // Safety rules to avoid destructive wide deletes/replaces caused by AI mis-mapping.
+  if (op === 'delete') {
+    // Deleting multiple lines is too risky; require single-line delete.
+    if (end !== start) return null;
+    return { op, start_line: start, end_line: end, replacement: '' };
+  }
+  if (op === 'insert_before' || op === 'insert_after') {
+    // Treat insert as anchored to a single line.
+    if (end !== start) return null;
+    if (!replacement.trim()) return null;
+    return { op, start_line: start, end_line: end, replacement };
+  }
+  // replace
+  if (!replacement.trim()) return null;
+  return { op, start_line: start, end_line: end, replacement };
 }
 
 interface AuditVulnerability {
