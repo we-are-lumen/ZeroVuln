@@ -2,6 +2,9 @@
   <img src="https://i.ibb.co.com/wFx1JrdK/ZEROVULN.png" alt="ZeroVuln Logo" width="160">
   <p><strong>Next-Generation LLM Inference API & Decentralized Fine-Tuning for Smart Contract Security</strong></p>
   <p>ZeroVuln is an advanced security platform focused on fine-tuning LLMs using decentralized infrastructure to detect vulnerabilities and generate secure Solidity smart contracts.</p>
+  <p>
+    <a href="https://zerovuln.vercel.app/"><strong>🌐 Live Demo: zerovuln.vercel.app</strong></a>
+  </p>
 </div>
 
 ---
