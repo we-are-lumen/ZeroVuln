@@ -6,7 +6,7 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 function getWalletAddress(): string | undefined {
   if (typeof window === "undefined") return DEFAULT_WALLET_ADDRESS;
-  return localStorage.getItem("walletAddress") || DEFAULT_WALLET_ADDRESS;
+  return DEFAULT_WALLET_ADDRESS;
 }
 
 export const api = ky.create({

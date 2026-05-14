@@ -95,6 +95,8 @@ const AdminDashboardPage = () => {
   const [inspectedFinding, setInspectedFinding] = useState<any | null>(null);
   const [mutatingId, setMutatingId] = useState<string | null>(null);
 
+  console.log("asdsa");
+
   const handleExecuteAction = async () => {
     if (!confirmAction) return;
 
@@ -222,7 +224,10 @@ const AdminDashboardPage = () => {
                     open={!!inspectedFinding}
                     onOpenChange={(open) => !open && setInspectedFinding(null)}
                   >
-                    <DialogContent className="flex max-h-[80vh] w-fit flex-col">
+                    <DialogContent
+                      aria-describedby=""
+                      className="flex max-h-[80vh] w-fit flex-col"
+                    >
                       <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
                           <span>{inspectedFinding?.title}</span>
