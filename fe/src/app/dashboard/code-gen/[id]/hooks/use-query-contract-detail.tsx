@@ -5,8 +5,9 @@ export const CONTRACT_DETAIL_QUERY_KEY = "get-contract-detail";
 
 const useQueryContractDetail = (id: string) => {
   return useQuery({
-    queryKey: [CONTRACT_DETAIL_QUERY_KEY],
+    queryKey: [CONTRACT_DETAIL_QUERY_KEY, id],
     queryFn: () => contractService.getContractDetail(id),
+    enabled: !!id,
   });
 };
 
