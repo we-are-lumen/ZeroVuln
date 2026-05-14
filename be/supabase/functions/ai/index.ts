@@ -2,7 +2,7 @@ import { resolveUser, unauthorized, notFound, badRequest, serverError, json, sup
 import { submitComputeJob } from '../_shared/og-storage.ts';
 
 // constant AI System Prompt
-const AI_CODEGEN_SYSTEM_PROMPT = "Target: Lead Blockchain Security Architect & Smart Contract Auditor.\nRole: Generate high-security Solidity smart contracts and provide a detailed forensic trace of an averted attack.\n\nOperational Rules:\n1. Standards: Solidity ^0.8.20, OpenZeppelin (AccessControl, ReentrancyGuard, SafeERC20).\n2. Patterns: Checks-Effects-Interactions, Pull-over-Push.\n3. Output Requirement: Valid JSON only. Do NOT use markdown code blocks, backticks, or any conversational text.\n\nCRITICAL WORKFLOW:\nStep 1: Generate a production-ready Solidity contract.\nStep 2: Identify specific mitigations within the code (line-by-line).\nStep 3: Simulate a 'Flow Tracing' of a failed hack attempt against this specific implementation.\n\nJSON Structure:\n{\n  \"code\": \"string (Single line string. Use \\n for newlines. Escape all internal quotes)\",\n  \"vulnerability_mitigations\": [\n    {\n      \"name\": \"string\",\n      \"reason\": \"string\",\n      \"start_line\": number,\n      \"end_line\": number\n    }\n  ]\n}\n\nConstraint: The response must be a single, raw JSON object. If you include any text outside the JSON braces, the system will fail.";
+const AI_CODEGEN_SYSTEM_PROMPT = "Target: Lead Blockchain Security Architect & Smart Contract Auditor.\nRole: Generate high-security Solidity smart contracts and provide a detailed forensic trace of an averted attack.\n\nOperational Rules:\n1. Standards: Solidity ^0.8.20, OpenZeppelin (AccessControl, ReentrancyGuard, SafeERC20).\n2. Patterns: Checks-Effects-Interactions, Pull-over-Push.\n3. Output Requirement: Valid JSON only. Do NOT use markdown code blocks, backticks, or any conversational text.\n\nCRITICAL WORKFLOW:\nStep 1: Generate a production-ready Solidity contract.\nStep 2: Identify specific mitigations within the code (line-by-line).\nStep 3: Simulate a 'Flow Tracing' of a failed hack attempt against this specific implementation.\n\nJSON Structure:\n{\n  \"contract_name\": \"string (Short PascalCase name for this contract, e.g. MyToken, RoyaltyNFT)\",\n  \"code\": \"string (Single line string. Use \\n for newlines. Escape all internal quotes)\",\n  \"vulnerability_mitigations\": [\n    {\n      \"name\": \"string\",\n      \"reason\": \"string\",\n      \"start_line\": number,\n      \"end_line\": number\n    }\n  ]\n}\n\nConstraint: The response must be a single, raw JSON object. If you include any text outside the JSON braces, the system will fail.";
 const AI_CODEAUDIT_SYSTEM_PROMPT = "**Role:** You are a Senior Smart Contract Auditor. Analyze the provided raw Solidity string for vulnerabilities and provide a production-ready fix.\n\n**Input:** A raw UTF-8 string of Solidity code.\n\n**Protocol:**\n\n1. **Index:** Internally treat the string as a list of lines starting at line 1.\n2. **Audit:** Identify Critical (Reentrancy, Logic), High (Access Control), Medium (Arithmetic, DoS), and Low (Gas, NatSpec) issues.\n3. **Remediate:** Create a `code_fixed` version using OpenZeppelin standards and the Checks-Effects-Interactions (CEI) pattern.\n4. **Map:** Track exactly which lines in the original code the vulnerabilities and fixes correspond to.\n\n**Output Rules (STRICT):**\n\n* **JSON ONLY.** Your entire response must be a single, valid JSON object.\n* **NO MARKDOWN WRAPPERS.** Do not use `json or ` blocks.\n* **Start your response directly with `{` and end with `}`.**\n* **NO CONVERSATIONAL TEXT.**\n* **LINE ACCURACY.** `start_line` and `end_line` must match the 1-based index of the input string exactly.\n* **VERBATIM FIX.** `suggested_code` must be an exact substring/extract from your `code_fixed`.\n\n**JSON Schema:**\n\n```json\n{\n  \"code_fixed\": \"string (The raw string corrected and secured smart contract code)\",\n  \"vulnerabilities\": [\n    {\n      \"name\": \"string\",\n      \"reasoning_trace\": [\"string (Step-by-step PoC referencing line numbers)\"],\n      \"start_line\": number,\n      \"end_line\": number,\n      \"severity\": \"<critical or high or medium or low or info>\",\n      \"confidence\": number,\n      \"suggested_code\": \"string\",\n      \"attack_trace\": {\n        \"traceId\": \"string (hex)\",\n        \"nodes\": [\n          {\n            \"id\": \"string\",\n            \"label\": \"string\",\n            \"type\": \"string\",\n            \"address\": \"string\"\n          }\n        ],\n        \"edges\": [\n          {\n            \"from\": \"string\",\n            \"to\": \"string\",\n            \"action\": \"string\",\n            \"value\": \"string (optional)\",\n            \"status\": \"string\"\n          }\n        ],\n        \"metadata\": {\n          \"blockNumber\": number,\n          \"confidence\": number,\n          \"vulnerability\": \"string\"\n        }\n      }\n    }\n  ]\n}\n\n```";
 
 Deno.serve(async (req: Request) => {
@@ -134,17 +134,50 @@ function codeStringToSourceBlocks(code: string) {
   return code.split(/\r?\n/).map((line, index) => ({ code: line, line: index + 1 }));
 }
 
+function isDefaultGeneratedName(name: unknown): boolean {
+  if (typeof name !== 'string') return false;
+  return /^Generated Contract - \d{4}-\d{2}-\d{2}$/.test(name);
+}
+
+function isDefaultAuditedName(name: unknown): boolean {
+  if (typeof name !== 'string') return false;
+  return /^Audited Contract - \d{4}-\d{2}-\d{2}$/.test(name);
+}
+
+function extractPrimaryContractName(code: string): string | null {
+  if (!code) return null;
+  // Find first `contract Name` (also matches `abstract contract Name`)
+  const m = code.match(/\bcontract\s+([A-Za-z_][A-Za-z0-9_]*)\b/);
+  if (!m?.[1]) return null;
+  const name = m[1].trim();
+  // Basic sanity check: keep it short & simple
+  if (name.length < 2 || name.length > 64) return null;
+  return name;
+}
+
+function sanitizeContractName(name: unknown): string | null {
+  if (typeof name !== 'string') return null;
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  // Keep only a simple Solidity identifier (PascalCase typically)
+  const m = trimmed.match(/^([A-Za-z_][A-Za-z0-9_]*)$/);
+  if (!m?.[1]) return null;
+  if (m[1].length > 64) return null;
+  return m[1];
+}
+
 function parseAIResponse(aiData: unknown) {
   const payload = extractAIContent(aiData);
 
   if (payload && typeof payload === 'object') {
-    const p = payload as { code?: unknown; vulnerability_mitigations?: unknown };
+    const p = payload as { contract_name?: unknown; code?: unknown; vulnerability_mitigations?: unknown };
+    const contract_name = sanitizeContractName(p.contract_name);
     const code = typeof p.code === 'string' ? p.code : '';
     const mitigations = Array.isArray(p.vulnerability_mitigations) ? p.vulnerability_mitigations : [];
-    return { code, mitigations, raw: payload };
+    return { contract_name, code, mitigations, raw: payload };
   }
 
-  return { code: typeof payload === 'string' ? payload : '', mitigations: [], raw: payload };
+  return { contract_name: null, code: typeof payload === 'string' ? payload : '', mitigations: [], raw: payload };
 }
 
 async function handleCodegen(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
@@ -157,10 +190,11 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
   // Resolve contract: accept uuid from caller, otherwise create a fresh draft.
   let contractRowId: number;
   let contractUuid: string;
+  let existingName: string | null = null;
   if (contract_id && typeof contract_id === 'string') {
     const { data: existing, error: existingError } = await supabase
       .from('contracts')
-      .select('id, uuid, owner_id, is_catalog')
+      .select('id, uuid, owner_id, is_catalog, name')
       .eq('uuid', contract_id)
       .single();
     if (existingError || !existing) return notFound('Contract not found');
@@ -168,6 +202,7 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
     if (existing.is_catalog) return badRequest('Cannot codegen into catalog contract');
     contractRowId = existing.id;
     contractUuid = existing.uuid;
+    existingName = typeof existing.name === 'string' ? existing.name : null;
   } else {
     const { data: newContract, error: contractError } = await supabase
       .from('contracts')
@@ -188,6 +223,7 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
     }
     contractRowId = newContract.id;
     contractUuid = newContract.uuid;
+    existingName = typeof newContract.name === 'string' ? newContract.name : null;
   }
 
   // Create audit record
@@ -223,6 +259,9 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
     const parsed = parseAIResponse(aiData);
     const generatedCode = parsed.code || '';
     const mitigations = parsed.mitigations;
+    const suggestedName =
+      parsed.contract_name ||
+      (generatedCode ? extractPrimaryContractName(generatedCode) : null);
 
     // Insert ai_findings for each vulnerability mitigation
     if (Array.isArray(mitigations) && mitigations.length > 0) {
@@ -257,13 +296,16 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
       }
     }
 
-    // Update contract with generated code as source_code line blocks
+    // Update contract with generated code as source_code line blocks (+ set AI-based name if default)
     if (generatedCode) {
       const sourceBlocks = codeStringToSourceBlocks(generatedCode);
+      const shouldUpdateName =
+        !!suggestedName && (existingName === null || isDefaultGeneratedName(existingName));
       const { error: updateError } = await supabase
         .from('contracts')
         .update({
           source_code: sourceBlocks,
+          ...(shouldUpdateName ? { name: suggestedName } : {}),
         })
         .eq('id', contractRowId);
 
@@ -306,10 +348,11 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
   // Resolve / create owning contract (cannot be null on auditor_findings; we use ai_findings here).
   let contractRowId: number;
   let contractUuid: string;
+  let existingName: string | null = null;
   if (contract_id && typeof contract_id === 'string') {
     const { data: existing, error: existingError } = await supabase
       .from('contracts')
-      .select('id, uuid, owner_id, is_catalog')
+      .select('id, uuid, owner_id, is_catalog, name')
       .eq('uuid', contract_id)
       .single();
     if (existingError || !existing) return notFound('Contract not found');
@@ -317,6 +360,7 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
     if (existing.is_catalog) return badRequest('Cannot audit catalog contract via this endpoint');
     contractRowId = existing.id;
     contractUuid = existing.uuid;
+    existingName = typeof existing.name === 'string' ? existing.name : null;
 
     // Re-audit: wipe previous audit findings + audit rows for this contract.
     const { data: priorAudits, error: priorAuditsError } = await supabase
@@ -375,6 +419,7 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
     }
     contractRowId = newContract.id;
     contractUuid = newContract.uuid;
+    existingName = typeof newContract.name === 'string' ? newContract.name : null;
   }
 
   const { data: audit, error: auditError } = await supabase
@@ -402,6 +447,17 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
 
     const aiData = await aiResponse.json();
     const parsed = parseAuditResponse(aiData);
+    const nameFromCode =
+      extractPrimaryContractName(parsed.code_fixed || '') || extractPrimaryContractName(code);
+    const shouldUpdateName =
+      !!nameFromCode && (existingName === null || isDefaultAuditedName(existingName));
+    if (shouldUpdateName) {
+      const { error: nameErr } = await supabase
+        .from('contracts')
+        .update({ name: nameFromCode })
+        .eq('id', contractRowId);
+      if (nameErr) console.error('Failed to update contract name:', nameErr);
+    }
     const findings = parsed.vulnerabilities.length > 0
       ? parsed.vulnerabilities.map((v) => ({
           audit_id: audit.id,
