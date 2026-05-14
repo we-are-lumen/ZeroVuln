@@ -3,6 +3,7 @@ import { cn } from "@/shared/lib/utils";
 import type { Metadata } from "next";
 import { Figtree, Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "sonner";
+import "@xyflow/react/dist/style.css";
 import "./globals.css";
 
 const figtree = Figtree({ subsets: ["latin"], variable: "--font-sans" });
