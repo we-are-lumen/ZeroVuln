@@ -66,7 +66,7 @@ const CatalogSection = () => {
               </div>
               <div className="flex w-1/2 flex-col">
                 <h5 className="text-xs text-mist-400">Reward</h5>
-                <p className="font-bold">{reward_per_finding ?? "-"}</p>
+                <p className="font-bold">{reward_per_finding ?? "0"} 0G</p>
               </div>
             </div>
             <div className="flex items-end justify-between">

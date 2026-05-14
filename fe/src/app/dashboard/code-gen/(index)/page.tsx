@@ -44,7 +44,7 @@ const CodeGenPage = () => {
   const { mutate: pay, isPending: isPaying } = useMutation({
     mutationFn: () => payForFeature("CodeGen", `codegen:${Date.now()}`),
     onMutate: () => {
-      toast.loading("Processing payment", { id: "pay-toast" });
+      toast.loading("Processing payment of 0.1 0G", { id: "pay-toast" });
     },
     onSuccess: () => {
       toast.success("Pembayaran berhasil.", { id: "pay-toast" });
@@ -133,7 +133,7 @@ const CodeGenPage = () => {
               <AlertDialogTitle>Confirm Transaction</AlertDialogTitle>
               <AlertDialogDescription className="text-mist-400">
                 Generating this smart contract requires a network fee of
-                <span className="font-bold text-primary"> 0.1 0g</span>. Please
+                <span className="font-bold text-primary"> 0.1 0G</span>. Please
                 confirm you want to proceed with the payment.
               </AlertDialogDescription>
             </AlertDialogHeader>

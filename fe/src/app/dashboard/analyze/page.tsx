@@ -60,7 +60,7 @@ const AnalyzePage = () => {
   const { mutate: pay, isPending: isPaying } = useMutation({
     mutationFn: () => payForFeature("Analyze", `analyze:${Date.now()}`),
     onMutate: () => {
-      toast.loading("Processing payment of", { id: "analyze-pay" });
+      toast.loading("Processing payment of 0.1 0G", { id: "analyze-pay" });
     },
     onSuccess: () => {
       toast.success("Payment successful", { id: "analyze-pay" });
@@ -168,7 +168,7 @@ const AnalyzePage = () => {
               <AlertDialogDescription className="text-mist-400">
                 Analyzing this smart contract for vulnerabilities requires a
                 network fee of
-                <span className="font-bold text-primary"> 0.1 0g</span>. Proceed
+                <span className="font-bold text-primary"> 0.1 0G</span>. Proceed
                 with the payment?
               </AlertDialogDescription>
             </AlertDialogHeader>
