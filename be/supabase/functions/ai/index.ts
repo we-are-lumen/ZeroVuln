@@ -1,6 +1,63 @@
 import { resolveUser, unauthorized, notFound, badRequest, serverError, json, supabase, corsPreflight } from '../_shared/supabase.ts';
 import { submitComputeJob } from '../_shared/og-storage.ts';
 
+const AI_CODEAUDIT_SYSTEM_PROMPT_V2 = `
+Role: You are a Senior Smart Contract Auditor.
+
+Task: Analyze the provided Solidity code for vulnerabilities and provide production-ready fixes.
+
+Input: A raw UTF-8 string of Solidity code.
+
+Protocol:
+1) Index the input as 1-based lines.
+2) Identify vulnerabilities with severity + confidence.
+3) Produce a full code_fixed (the full corrected contract).
+4) For each vulnerability, provide a remediation plan that is safe to apply:
+   - If the issue is on a single line, remediation.mode MUST be "line" and the fix MUST target only that line.
+   - If the issue is inside a function, remediation.mode MUST be "function" and the fix MUST provide a full replacement for that function.
+
+Output Rules (STRICT):
+- JSON ONLY. Return a single JSON object, no markdown, no extra text.
+- start_line/end_line MUST reference the ORIGINAL input lines.
+- For remediation.mode="line":
+  - remediation.line MUST equal start_line and end_line.
+  - remediation.replacement_line MUST be a single line (no "\\n"). Use empty string "" to delete that line.
+- For remediation.mode="function":
+  - remediation.function_name MUST be the Solidity function name.
+  - remediation.replacement_function MUST be the FULL function code:
+    - Must start with "function <name>"
+    - Must include the full body with balanced braces.
+    - Must NOT include any extra closing brace that belongs OUTSIDE the function.
+
+JSON Schema:
+{
+  "code_fixed": "string",
+  "vulnerabilities": [
+    {
+      "name": "string",
+      "reasoning_trace": ["string"],
+      "start_line": number,
+      "end_line": number,
+      "severity": "critical|high|medium|low|info",
+      "confidence": number,
+      "remediation": {
+        "mode": "line|function",
+        "line": number,
+        "replacement_line": "string",
+        "function_name": "string",
+        "replacement_function": "string"
+      },
+      "attack_trace": {
+        "traceId": "string",
+        "nodes": [{ "id": "string", "label": "string", "type": "string", "address": "string" }],
+        "edges": [{ "from": "string", "to": "string", "action": "string", "value": "string", "status": "string" }],
+        "metadata": { "blockNumber": number, "confidence": number, "vulnerability": "string" }
+      }
+    }
+  ]
+}
+`.trim();
+
 // constant AI System Prompt
 const AI_CODEGEN_SYSTEM_PROMPT = "Target: Lead Blockchain Security Architect & Smart Contract Auditor.\nRole: Generate high-security Solidity smart contracts and provide a detailed forensic trace of an averted attack.\n\nOperational Rules:\n1. Standards: Solidity ^0.8.20, OpenZeppelin (AccessControl, ReentrancyGuard, SafeERC20).\n2. Patterns: Checks-Effects-Interactions, Pull-over-Push.\n3. Output Requirement: Valid JSON only. Do NOT use markdown code blocks, backticks, or any conversational text.\n\nCRITICAL WORKFLOW:\nStep 1: Generate a production-ready Solidity contract.\nStep 2: Identify specific mitigations within the code (line-by-line).\nStep 3: Simulate a 'Flow Tracing' of a failed hack attempt against this specific implementation.\n\nJSON Structure:\n{\n  \"contract_name\": \"string (Short PascalCase name for this contract, e.g. MyToken, RoyaltyNFT)\",\n  \"code\": \"string (Single line string. Use \\n for newlines. Escape all internal quotes)\",\n  \"vulnerability_mitigations\": [\n    {\n      \"name\": \"string\",\n      \"reason\": \"string\",\n      \"start_line\": number,\n      \"end_line\": number\n    }\n  ]\n}\n\nConstraint: The response must be a single, raw JSON object. If you include any text outside the JSON braces, the system will fail.";
 const AI_CODEAUDIT_SYSTEM_PROMPT = "**Role:** You are a Senior Smart Contract Auditor.\n\n**Task:** Analyze the provided raw Solidity string for vulnerabilities and provide a production-ready fix.\n\n**Input:** A raw UTF-8 string of Solidity code.\n\n**Protocol:**\n\n1. **Index:** Treat the input as a list of lines starting at line 1.\n2. **Audit:** Identify Critical (Reentrancy, Logic), High (Access Control), Medium (Arithmetic, DoS), and Low (Gas, NatSpec) issues.\n3. **Remediate:** Produce a full `code_fixed` version using OpenZeppelin standards and the Checks-Effects-Interactions (CEI) pattern.\n4. **Patch Instructions (IMPORTANT):** For each vulnerability, output a deterministic `patch` object describing exactly what to change. This patch is what the frontend will apply.\n\n**Output Rules (STRICT):**\n\n* **JSON ONLY.** Your entire response must be a single, valid JSON object.\n* **NO MARKDOWN WRAPPERS.** Do not use `json or ` blocks.\n* **Start your response directly with `{` and end with `}`.**\n* **NO CONVERSATIONAL TEXT.**\n* **LINE ACCURACY.** `start_line` and `end_line` must match the 1-based index of the ORIGINAL input string.\n* **PATCH ACCURACY.** `patch.start_line` and `patch.end_line` must point to the exact lines in the ORIGINAL input that should be edited.\n* **REPLACE MUST PRESERVE BLOCK SHAPE.** When `patch.op` is `replace`, `patch.replacement` MUST contain the FULL replacement block for lines `patch.start_line..patch.end_line`, including any unchanged lines. The number of lines in `patch.replacement` must equal `(patch.end_line - patch.start_line + 1)`.\n* **VERBATIM REPLACEMENT.** `patch.replacement` must be final Solidity code (may be multi-line). Do not output partial snippets for a multi-line replace.\n\n**JSON Schema:**\n\n{\n  \"code_fixed\": \"string\",\n  \"vulnerabilities\": [\n    {\n      \"name\": \"string\",\n      \"reasoning_trace\": [\"string\"],\n      \"start_line\": number,\n      \"end_line\": number,\n      \"severity\": \"critical|high|medium|low|info\",\n      \"confidence\": number,\n      \"patch\": {\n        \"op\": \"replace|insert_before|insert_after|delete\",\n        \"start_line\": number,\n        \"end_line\": number,\n        \"replacement\": \"string\"\n      },\n      \"attack_trace\": { ... }\n    }\n  ]\n}\n";
@@ -438,7 +495,7 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
 
     const aiResponse = await aiFetch({
       prompt: code,
-      system_prompt: AI_CODEAUDIT_SYSTEM_PROMPT,
+      system_prompt: AI_CODEAUDIT_SYSTEM_PROMPT_V2,
     });
 
     if (!aiResponse.ok) {
@@ -447,6 +504,7 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
 
     const aiData = await aiResponse.json();
     const parsed = parseAuditResponse(aiData);
+    const inputLines = code.split(/\r?\n/);
     const nameFromCode =
       extractPrimaryContractName(parsed.code_fixed || '') || extractPrimaryContractName(code);
     const shouldUpdateName =
@@ -460,7 +518,8 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
     }
     const findings = parsed.vulnerabilities.length > 0
       ? parsed.vulnerabilities.map((v) => {
-          const patch = normalizePatch(v.patch);
+          const remediation = normalizeRemediation(v.remediation, v, inputLines);
+          const patch = normalizePatch(v.patch, inputLines);
           return ({
           audit_id: audit.id,
           severity: normalizeSeverity(v.severity),
@@ -471,11 +530,13 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
           confidence: typeof v.confidence === 'number' ? v.confidence : null,
           status: 'open',
           reasoning_trace: { vulnerability: v },
-          remediation: patch
-            ? { patch }
-            : v.suggested_code
-              ? { suggested_code: v.suggested_code }
-              : null,
+          remediation: remediation
+            ? remediation
+            : patch
+              ? { patch }
+              : v.suggested_code
+                ? { suggested_code: v.suggested_code }
+                : null,
           attack_trace: v.attack_trace ?? null,
         });
       })
@@ -536,7 +597,79 @@ type FindingPatch = {
   replacement?: string;
 };
 
-function normalizePatch(value: unknown): FindingPatch | null {
+function countCurlyBraces(s: string): { open: number; close: number } {
+  let open = 0;
+  let close = 0;
+  for (const ch of s) {
+    if (ch === '{') open++;
+    if (ch === '}') close++;
+  }
+  return { open, close };
+}
+
+type FindingRemediationMode = 'line' | 'function';
+type FindingRemediation =
+  | {
+      mode: 'line';
+      line: number;
+      replacement_line: string;
+    }
+  | {
+      mode: 'function';
+      function_name: string;
+      replacement_function: string;
+    };
+
+function normalizeRemediation(
+  value: unknown,
+  vuln: { start_line?: number; end_line?: number },
+  sourceLines: string[],
+): FindingRemediation | null {
+  if (!value || typeof value !== 'object') return null;
+  const v = value as Record<string, unknown>;
+  const mode = v.mode;
+  if (mode !== 'line' && mode !== 'function') return null;
+
+  if (mode === 'line') {
+    const line = v.line;
+    const replacementLine = typeof v.replacement_line === 'string' ? v.replacement_line : '';
+    if (typeof line !== 'number' || !Number.isFinite(line)) return null;
+    if (line < 1 || line > sourceLines.length) return null;
+    // Must be a single line (no newline).
+    if (replacementLine.includes('\n') || replacementLine.includes('\r')) return null;
+    // Must match vuln range (single-line finding).
+    if (typeof vuln.start_line === 'number' && typeof vuln.end_line === 'number') {
+      if (vuln.start_line !== vuln.end_line) return null;
+      if (line !== vuln.start_line) return null;
+    }
+    return { mode: 'line', line, replacement_line: replacementLine };
+  }
+
+  const functionNameRaw = typeof v.function_name === 'string' ? v.function_name : '';
+  const replacementFunction =
+    typeof v.replacement_function === 'string' ? v.replacement_function : '';
+
+  let functionName = functionNameRaw.trim();
+  if (!functionName) {
+    const m = replacementFunction.match(/\bfunction\s+([A-Za-z_][A-Za-z0-9_]*)\b/);
+    if (m?.[1]) functionName = m[1];
+  }
+  if (!functionName) return null;
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(functionName)) return null;
+  if (!replacementFunction.trim()) return null;
+  if (!replacementFunction.trimStart().startsWith(`function ${functionName}`)) return null;
+  // Ensure braces are balanced in the replacement function itself.
+  const b = countCurlyBraces(replacementFunction);
+  if (b.open === 0 || b.open !== b.close) return null;
+
+  return {
+    mode: 'function',
+    function_name: functionName,
+    replacement_function: replacementFunction,
+  };
+}
+
+function normalizePatch(value: unknown, sourceLines: string[]): FindingPatch | null {
   if (!value || typeof value !== 'object') return null;
   const v = value as Record<string, unknown>;
 
@@ -555,6 +688,7 @@ function normalizePatch(value: unknown): FindingPatch | null {
   if (typeof start !== 'number' || typeof end !== 'number') return null;
   if (!Number.isFinite(start) || !Number.isFinite(end)) return null;
   if (start < 1 || end < start) return null;
+  if (start > sourceLines.length || end > sourceLines.length) return null;
 
   const replacement = typeof v.replacement === 'string' ? v.replacement : '';
 
@@ -576,6 +710,15 @@ function normalizePatch(value: unknown): FindingPatch | null {
   const expectedLines = end - start + 1;
   const actualLines = replacement.split(/\r?\n/).length;
   if (actualLines !== expectedLines) return null;
+
+  // Additional safety: the replacement block must keep curly-brace balance
+  // within the replaced range. This avoids cases where the AI includes an extra `}`
+  // that actually belongs outside the range, causing `}}` after apply.
+  const originalBlock = sourceLines.slice(start - 1, end).join('\n');
+  const o = countCurlyBraces(originalBlock);
+  const r = countCurlyBraces(replacement);
+  if (o.open !== r.open || o.close !== r.close) return null;
+
   return { op, start_line: start, end_line: end, replacement };
 }
 
@@ -587,6 +730,7 @@ interface AuditVulnerability {
   confidence?: number;
   reasoning_trace?: string[];
   suggested_code?: unknown;
+  remediation?: unknown;
   patch?: unknown;
   attack_trace?: unknown;
 }
