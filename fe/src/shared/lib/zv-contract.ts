@@ -42,22 +42,40 @@ function toRefId(ref?: string): string {
   return keccak256(toUtf8Bytes(ref));
 }
 
+function toSimpleWalletError(err: unknown, actionLabel = "Payment"): Error {
+  // MetaMask user reject: code 4001 (EIP-1193)
+  const anyErr = err as any;
+  const code = anyErr?.code ?? anyErr?.info?.error?.code;
+  const message: string = String(anyErr?.message ?? anyErr?.shortMessage ?? "");
+
+  const rejected =
+    code === 4001 ||
+    /user rejected|rejected|denied/i.test(message);
+
+  if (rejected) return new Error(`${actionLabel} cancelled in wallet.`);
+  return err instanceof Error ? err : new Error(`${actionLabel} failed.`);
+}
+
 export async function payForFeature(feature: ZVFeature, ref?: string) {
-  const ethereum = getEthereum();
-  if (!ethereum) throw new Error("Wallet provider tidak ditemukan. Install MetaMask dulu.");
+  try {
+    const ethereum = getEthereum();
+    if (!ethereum) throw new Error("Wallet provider tidak ditemukan. Install MetaMask dulu.");
 
-  await ensureOgGalileoChain(ethereum);
+    await ensureOgGalileoChain(ethereum);
 
-  const provider = new BrowserProvider(ethereum);
-  const signer = await provider.getSigner();
-  const zv = new Contract(requireContractAddress(), ZV_ABI, signer);
+    const provider = new BrowserProvider(ethereum);
+    const signer = await provider.getSigner();
+    const zv = new Contract(requireContractAddress(), ZV_ABI, signer);
 
-  const fee: bigint = await zv.featureFee();
-  const tx = await zv.payForFeature(featureToEnum(feature), toRefId(ref), {
-    value: fee,
-  });
-  await tx.wait();
-  return { txHash: tx.hash, feeWei: fee };
+    const fee: bigint = await zv.featureFee();
+    const tx = await zv.payForFeature(featureToEnum(feature), toRefId(ref), {
+      value: fee,
+    });
+    await tx.wait();
+    return { txHash: tx.hash, feeWei: fee };
+  } catch (err) {
+    throw toSimpleWalletError(err, "Payment");
+  }
 }
 
 export async function getClaimableRewardWei(walletAddress: string): Promise<bigint> {
