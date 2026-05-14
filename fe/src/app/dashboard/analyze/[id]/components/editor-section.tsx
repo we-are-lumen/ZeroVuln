@@ -55,7 +55,8 @@ const EditorSection = ({
   const [isDeploying, setIsDeploying] = useState(false);
   const [isPaying, setIsPaying] = useState(false);
 
-  const latestTrace = data?.audits?.[0]?.ai_findings?.[0]?.attack_trace;
+  const latestTrace = data?.audits?.[0]?.ai_findings?.find((f) => f.attack_trace)
+    ?.attack_trace;
 
   const handleCopy = async () => {
     if (!finalCode) return;

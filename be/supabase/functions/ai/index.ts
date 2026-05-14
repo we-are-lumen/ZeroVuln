@@ -630,6 +630,14 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
       ? parsed.vulnerabilities.map((v) => {
           const remediation = normalizeRemediation(v.remediation, v, inputLines);
           const patch = normalizePatch(v.patch, inputLines);
+          const sev = typeof v.severity === 'string' ? v.severity.toLowerCase() : '';
+          const mustHaveTrace = sev === 'critical' || sev === 'high' || sev === 'medium';
+          const attackTrace =
+            v.attack_trace && typeof v.attack_trace === 'object'
+              ? v.attack_trace
+              : mustHaveTrace
+                ? fallbackAttackTrace(v)
+                : null;
           return ({
           audit_id: audit.id,
           severity: normalizeSeverity(v.severity),
@@ -647,7 +655,7 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
               : v.suggested_code
                 ? { suggested_code: v.suggested_code }
                 : null,
-          attack_trace: v.attack_trace ?? null,
+          attack_trace: attackTrace,
         });
       })
       : [{
@@ -729,6 +737,67 @@ type FindingRemediation =
       function_name: string;
       replacement_function: string;
     };
+
+function fallbackAttackTrace(vuln: { name?: string; start_line?: number; end_line?: number }): Record<string, unknown> {
+  const vulnName = typeof vuln.name === 'string' && vuln.name.trim() ? vuln.name.trim() : 'Vulnerability';
+  const range =
+    typeof vuln.start_line === 'number' && typeof vuln.end_line === 'number'
+      ? `lines ${vuln.start_line}-${vuln.end_line}`
+      : 'unknown lines';
+
+  return {
+    traceId: `fallback-${Date.now()}`,
+    nodes: [
+      { id: 'attacker_eoa', type: 'EOA', label: 'Attacker EOA', address: '0xATTACKER' },
+      { id: 'victim', type: 'Contract', label: 'Victim Contract', address: '0xVICTIM' },
+      { id: 'vuln_fn', type: 'Function', label: `Vulnerable path (${range})`, address: '-' },
+      { id: 'attacker_contract', type: 'Contract', label: 'Attacker Contract (optional)', address: '0xATTACKER_CONTRACT' },
+    ],
+    edges: [
+      { from: 'attacker_eoa', to: 'victim', action: 'Prepare state (deposit / setup)', value: '', status: 'success' },
+      { from: 'attacker_eoa', to: 'vuln_fn', action: 'Call vulnerable function', value: '', status: 'success' },
+      { from: 'attacker_contract', to: 'victim', action: 'Re-enter / abuse external call (if applicable)', value: '', status: 're-entrant' },
+    ],
+    metadata: {
+      blockNumber: 0,
+      confidence: 35,
+      vulnerability: vulnName,
+      steps: [
+        {
+          step: 1,
+          title: 'Setup',
+          description: 'Attacker prepares the required preconditions (e.g., funds deposited, roles/allowances set, or state primed).',
+          from: 'attacker_eoa',
+          to: 'victim',
+          action: 'setup',
+        },
+        {
+          step: 2,
+          title: 'Trigger',
+          description: `Attacker calls the vulnerable path (${range}).`,
+          from: 'attacker_eoa',
+          to: 'vuln_fn',
+          action: 'trigger',
+        },
+        {
+          step: 3,
+          title: 'Exploit',
+          description:
+            'If the victim performs an external call before updating state (or uses unsafe auth/oracle), attacker re-enters or manipulates control flow to extract value.',
+          from: 'attacker_contract',
+          to: 'victim',
+          action: 'exploit',
+        },
+        {
+          step: 4,
+          title: 'Outcome',
+          description:
+            'Victim ends up in an inconsistent state or loses funds. Attacker stops once further exploitation is no longer profitable.',
+        },
+      ],
+    },
+  };
+}
 
 function normalizeRemediation(
   value: unknown,
