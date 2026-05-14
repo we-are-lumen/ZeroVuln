@@ -1,24 +1,24 @@
 # ZeroVuln API Docs (FE)
 
-Dokumen ini untuk integrasi frontend ke Supabase Edge Functions.
+This document is for integrating the frontend with Supabase Edge Functions.
 
 ## 1) Base URL
 
 - Production: `https://<PROJECT_REF>.supabase.co/functions/v1`
 - Local: `http://127.0.0.1:54321/functions/v1`
 
-## 2) Auth Header (wajib)
+## 2) Auth Header (Required)
 
-Kirim dua header ini di semua request protected:
+Send these two headers in all protected requests:
 
 ```http
 Authorization: Bearer <SUPABASE_ANON_KEY>
 X-Wallet-Address: 0x1234567890abcdef1234567890abcdef12345678
 ```
 
-Catatan:
-- `X-Wallet-Address` wajib format EVM `0x` + 40 hex.
-- Identifier publik API pakai `uuid` (bukan `id` integer internal DB).
+Notes:
+- `X-Wallet-Address` must be in EVM format: `0x` + 40 hex characters.
+- Public API identifiers use `uuid` (not the internal DB integer `id`).
 
 ### Env Ready-To-Use
 
@@ -31,7 +31,7 @@ export BASE_URL="https://${PROJECT_REF}.supabase.co/functions/v1"
 
 ## 3) Error Shape
 
-Umumnya error return format:
+General error return format:
 
 ```json
 {
@@ -44,9 +44,9 @@ Umumnya error return format:
 
 ## 4) Endpoint Detail (Request Body)
 
-`Path params` selalu pakai UUID publik.
+`Path params` always use public UUIDs.
 
-### 4.1 Contracts (milik user)
+### 4.1 Contracts (User-owned)
 
 #### `GET /contracts`
 - Query params: none
@@ -167,24 +167,24 @@ Umumnya error return format:
 
 ### 4.3 AI Trigger
 
-Semua endpoint AI di bawah ini bersifat **synchronous** (bukan polling). Handler menunggu response dari AI inference service, lalu menulis ke DB sebelum membalas.
+All AI endpoints below are **synchronous** (not polling). The handler waits for a response from the AI inference service, then writes to the DB before responding.
 
-Response umum: status `200` dengan payload berisi `audit_id`, `contract_id`, dan hasil parsing.
+General response: status `200` with a payload containing `audit_id`, `contract_id`, and parsing results.
 
 #### `POST /ai-codegen`
 - Query params: none
 - Request body:
 ```json
 {
-  "prompt": "buat ERC20 sederhana",
+  "prompt": "create a simple ERC20",
   "contract_id": "<contract_uuid>"
 }
 ```
 - Required fields:
   - `prompt: string`
 - Optional fields:
-  - `contract_id?: string` (UUID kontrak existing milik user, bukan catalog). Jika tidak dikirim, handler membuat draft contract baru.
-- Response body (contoh):
+  - `contract_id?: string` (UUID of an existing contract owned by the user, not a catalog contract). If not sent, the handler creates a new draft contract.
+- Response body (example):
 ```json
 {
   "contract_id": "<contract_uuid>",
@@ -200,7 +200,7 @@ Response umum: status `200` dengan payload berisi `audit_id`, `contract_id`, dan
   ]
 }
 ```
-- Handler juga update `contracts.source_code` dengan kode yang di-generate dan membuat `ai_findings` (1 per item `mitigations`).
+- The handler also updates `contracts.source_code` with the generated code and creates `ai_findings` (1 per `mitigations` item).
 
 #### `POST /ai-audit`
 - Query params: none
@@ -213,11 +213,11 @@ Response umum: status `200` dengan payload berisi `audit_id`, `contract_id`, dan
 }
 ```
 - Required fields:
-  - `code: string` (raw Solidity source untuk diaudit)
+  - `code: string` (raw Solidity source to be audited)
 - Optional fields:
-  - `prompt?: string` (instruksi tambahan; default: "Audit this Solidity contract for security vulnerabilities.")
-  - `contract_id?: string` (UUID kontrak existing milik user). Jika tidak dikirim, handler membuat draft contract baru berisi `code` tersebut.
-- Response body (contoh):
+  - `prompt?: string` (additional instructions; default: "Audit this Solidity contract for security vulnerabilities.")
+  - `contract_id?: string` (UUID of an existing contract owned by the user). If not sent, the handler creates a new draft contract containing the provided `code`.
+- Response body (example):
 ```json
 {
   "contract_id": "<contract_uuid>",
@@ -237,7 +237,7 @@ Response umum: status `200` dengan payload berisi `audit_id`, `contract_id`, dan
   ]
 }
 ```
-- Findings disimpan di tabel `ai_findings` (bukan `auditor_findings`).
+- Findings are stored in the `ai_findings` table (not `auditor_findings`).
 
 #### `POST /ai-auto-fix`
 - Query params: none
@@ -250,9 +250,9 @@ Response umum: status `200` dengan payload berisi `audit_id`, `contract_id`, dan
 - Required fields:
   - `ai_finding_id: string`
 - Behavior:
-  - Membuat audit baru kind=`auto_fix` untuk contract yang sama.
-  - Submit compute job ke 0G (async di sisi 0G), update audit ke `running`, dan menandai `ai_finding.status = 'fixed'`.
-- Response: `202` dengan body `{ "audit_id": "<audit_uuid>" }`.
+  - Creates a new audit of kind=`auto_fix` for the same contract.
+  - Submits a compute job to 0G (async on the 0G side), updates the audit to `running`, and marks `ai_finding.status = 'fixed'`.
+- Response: `202` with body `{ "audit_id": "<audit_uuid>" }`.
 
 #### `POST /ai-gas-opt`
 - Query params: none
@@ -263,10 +263,10 @@ Response umum: status `200` dengan payload berisi `audit_id`, `contract_id`, dan
 }
 ```
 - Required fields:
-  - `contract_id: string` (UUID kontrak milik user, bukan catalog)
+  - `contract_id: string` (UUID of a contract owned by the user, not a catalog contract)
 - Behavior:
-  - Membuat audit baru kind=`gas_opt`, submit compute job ke 0G, update audit ke `running`.
-- Response: `202` dengan body `{ "audit_id": "<audit_uuid>" }`.
+  - Creates a new audit of kind=`gas_opt`, submits a compute job to 0G, and updates the audit to `running`.
+- Response: `202` with body `{ "audit_id": "<audit_uuid>" }`.
 
 ### 4.4 Audits
 
@@ -275,15 +275,15 @@ Response umum: status `200` dengan payload berisi `audit_id`, `contract_id`, dan
   - `contract_id=<contract_uuid>`
   - `status=<pending|running|succeeded|failed>`
 - Request body: none
-- Response: list audit untuk contract milik user (catalog excluded), tiap item berisi `uuid, status, kind, summary, started_at, completed_at, created_at, updated_at, contracts(...), ai_findings(count)`.
+- Response: list of audits for the user's contract (excluding catalog), each item containing `uuid, status, kind, summary, started_at, completed_at, created_at, updated_at, contracts(...), ai_findings(count)`.
 
 #### `GET /audits/:audit_uuid`
 - Query params: none
 - Request body: none
 - Notes:
-  - Untuk endpoint async (`ai-auto-fix`, `ai-gas-opt`), dipakai polling sampai `status` jadi `succeeded` atau `failed`.
-  - Untuk `ai-codegen` & `ai-audit`, handler sudah set `succeeded`/`failed` sebelum response — polling biasanya tidak perlu.
-  - Response include `ai_findings`.
+  - For async endpoints (`ai-auto-fix`, `ai-gas-opt`), use polling until `status` becomes `succeeded` or `failed`.
+  - For `ai-codegen` & `ai-audit`, the handler sets `succeeded`/`failed` before responding — polling is usually not necessary.
+  - Response includes `ai_findings`.
 
 ### 4.5 AI Findings
 
@@ -301,7 +301,7 @@ Response umum: status `200` dengan payload berisi `audit_id`, `contract_id`, dan
 ```
 - Allowed values: `open | fixed | dismissed | accepted`
 
-### 4.6 Auditor Findings (user kontribusi)
+### 4.6 Auditor Findings (User Contribution)
 
 #### `GET /auditor-findings`
 - Query params: none
@@ -321,13 +321,13 @@ Response umum: status `200` dengan payload berisi `audit_id`, `contract_id`, dan
 }
 ```
 - Required fields:
-  - `contract_id: string` (UUID **catalog** contract — wajib catalog karena trigger DB)
+  - `contract_id: string` (UUID of a **catalog** contract — must be a catalog contract due to DB triggers)
   - `title: string`
   - `severity: "critical" | "high" | "medium" | "low" | "info"`
   - `description: string`
   - `line_start: number` (>=1)
   - `line_end: number` (>= line_start)
-- Behavior: finding langsung dibuat dengan `review_status = "submitted"` dan `submitted_at = now()`.
+- Behavior: finding is immediately created with `review_status = "submitted"` and `submitted_at = now()`.
 
 #### `GET /auditor-findings/:auditor_finding_uuid`
 - Query params: none
@@ -347,42 +347,42 @@ Response umum: status `200` dengan payload berisi `audit_id`, `contract_id`, dan
 }
 ```
 - Body optional fields:
-  - `contract_id?: string` (harus catalog contract)
+  - `contract_id?: string` (must be a catalog contract)
   - `title?: string`
   - `severity?: "critical" | "high" | "medium" | "low" | "info"`
   - `description?: string`
   - `line_start?: number` (>=1)
   - `line_end?: number` (>= line_start)
-- Tidak bisa update kalau `review_status` sudah `approved` atau `rejected`.
+- Cannot be updated if `review_status` is already `approved` or `rejected`.
 
 #### `PATCH /auditor-findings/:auditor_finding_uuid/submit`
 - Query params: none
 - Request body: none
-- Behavior: ubah `review_status` jadi `submitted` dan set `submitted_at`. Hanya bisa dari `draft` atau `submitted`.
+- Behavior: changes `review_status` to `submitted` and sets `submitted_at`. Only allowed from `draft` or `submitted` status.
 
 ### 4.7 Admin Review
 
-Semua endpoint ini butuh user admin (`users.is_admin = true`).
+All these endpoints require an admin user (`users.is_admin = true`).
 
 #### `GET /admin/auditor-findings`
 - Query params (optional):
   - `review_status=<draft|submitted|approved|rejected>`
 - Request body: none
-- Default behavior: kalau query tidak dikirim, backend pakai `review_status=submitted`.
-- Response include join: `contracts(...)`, `users:contributor_id(...)`.
+- Default behavior: if the query is not sent, the backend defaults to `review_status=submitted`.
+- Response includes joins: `contracts(...)`, `users:contributor_id(...)`.
 
 #### `POST /admin/auditor-findings/:auditor_finding_uuid/approve`
 - Query params: none
 - Request body: none
 - Behavior:
-  - Validasi `review_status = "submitted"` & contract referensi catalog.
-  - Update `review_status = "approved"`, `decided_at = now()`.
-  - Best-effort upload JSONL dataset record ke 0G Storage; set `dataset_uri` & `dataset_hash` di finding.
+  - Validates `review_status = "submitted"` & catalog contract reference.
+  - Updates `review_status = "approved"`, `decided_at = now()`.
+  - Best-effort upload of JSONL dataset record to 0G Storage; sets `dataset_uri` & `dataset_hash` in the finding.
 
 #### `POST /admin/auditor-findings/:auditor_finding_uuid/reject`
 - Query params: none
 - Request body: none
-- Behavior: Validasi `review_status = "submitted"`, update jadi `rejected` + `decided_at = now()`.
+- Behavior: Validates `review_status = "submitted"`, updates status to `rejected` + `decided_at = now()`.
 
 ### 4.8 Me
 
@@ -396,7 +396,7 @@ Semua endpoint ini butuh user admin (`users.is_admin = true`).
 #### `GET /public-stats`
 - Query params: none
 - Request body: none
-- Response (contoh):
+- Response (example):
 ```json
 {
   "total_reward_distributed": 5000,
@@ -405,17 +405,17 @@ Semua endpoint ini butuh user admin (`users.is_admin = true`).
   "total_active_auditors": 18
 }
 ```
-- Endpoint ini **public**, tidak memerlukan header `Authorization` maupun `X-Wallet-Address`.
+- This endpoint is **public**, and does not require `Authorization` or `X-Wallet-Address` headers.
 
 ## 5) Polling Pattern (FE)
 
-Hanya berlaku untuk endpoint AI async:
+Only applies to async AI endpoints:
 
-1. Call `/ai-auto-fix` atau `/ai-gas-opt` → dapat `audit_id` (status `202`).
-2. Poll `GET /audits/:audit_uuid` tiap 2–3 detik.
-3. Stop saat `status` adalah `succeeded` atau `failed`.
+1. Call `/ai-auto-fix` or `/ai-gas-opt` → receive `audit_id` (status `202`).
+2. Poll `GET /audits/:audit_uuid` every 2–3 seconds.
+3. Stop when `status` is `succeeded` or `failed`.
 
-`/ai-codegen` dan `/ai-audit` synchronous — langsung balas hasil di response (status `200`).
+`/ai-codegen` and `/ai-audit` are synchronous — they provide the results directly in the response (status `200`).
 
 ## 6) cURL Template
 
@@ -425,9 +425,9 @@ curl -X GET "${BASE_URL}/me" \
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
 ```
 
-## 7) cURL Semua API
+## 7) cURL for all APIs
 
-Set UUID yang dibutuhkan:
+Set the required UUIDs:
 
 ```bash
 export CONTRACT_UUID="<contract_uuid>"
@@ -437,7 +437,7 @@ export AUDITOR_FINDING_UUID="<auditor_finding_uuid>"
 export CATALOG_CONTRACT_UUID="<catalog_contract_uuid>"
 ```
 
-### 7.1 Contracts (milik user)
+### 7.1 Contracts (User-owned)
 
 #### GET /contracts
 ```bash
@@ -564,7 +564,7 @@ curl -X POST "${BASE_URL}/ai-codegen" \
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
   -H "Content-Type: application/json" \
   -d '{
-    "prompt": "buat ERC20 sederhana",
+    "prompt": "create a simple ERC20",
     "contract_id": "'"${CONTRACT_UUID}"'"
   }'
 ```

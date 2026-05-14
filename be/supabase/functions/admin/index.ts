@@ -92,7 +92,7 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
   const decidedAt = new Date().toISOString();
   const rewardPerFinding = contract.reward_per_finding ?? 0;
 
-  // Step 1: Update DB (optimistic). Jika on-chain gagal, kita rollback.
+  // Step 1: Update DB (optimistic). If on-chain fails, we rollback.
   const { data: updated, error } = await supabase
     .from('auditor_findings')
     .update({
@@ -106,7 +106,7 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
 
   if (error) return serverError(error.message);
 
-  // Step 2: On-chain allocate reward (jika reward > 0)
+  // Step 2: On-chain allocate reward (if reward > 0)
   if (rewardPerFinding > 0) {
     try {
       await allocateRewardFromCatalogOnchain({
@@ -116,7 +116,7 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
       });
     } catch (e) {
       console.error('Failed to allocate reward on-chain:', e);
-      // rollback DB ke status submitted supaya konsisten (user request: gagal jika on-chain gagal)
+      // Rollback DB to submitted status for consistency (user request: fail if on-chain fails)
       await supabase
         .from('auditor_findings')
         .update({

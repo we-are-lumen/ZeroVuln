@@ -119,14 +119,14 @@ async function handleCreateCatalogContract(req: Request, auth: { user_id: number
 
   if (error) return serverError(error.message);
 
-  // Integrasi on-chain: set reward_per_finding untuk catalog ini
+  // On-chain integration: set reward_per_finding for this catalog
   try {
     await setCatalogRewardOnchain({
       catalogUuid: data.uuid,
       rewardPerFinding0g: body.reward_per_finding || 0,
     });
   } catch (e) {
-    // rollback DB insert supaya konsisten (user request: gagal kalau on-chain gagal)
+    // Rollback DB insert for consistency (user request: fail if on-chain fails)
     console.error('Failed to set catalog reward on-chain:', e);
     await supabase.from('contracts').delete().eq('uuid', data.uuid);
     const msg = e instanceof Error ? e.message : 'Unknown error';
@@ -172,7 +172,7 @@ async function handleUpdateCatalogContract(req: Request, auth: { user_id: number
 
   if (error) return serverError(error.message);
 
-  // Integrasi on-chain: update reward mapping jika reward_per_finding di-set (termasuk set ke 0)
+  // On-chain integration: update reward mapping if reward_per_finding is set (including set to 0)
   try {
     const nextReward = body.reward_per_finding !== undefined ? body.reward_per_finding : existing.reward_per_finding;
     await setCatalogRewardOnchain({
@@ -181,7 +181,7 @@ async function handleUpdateCatalogContract(req: Request, auth: { user_id: number
     });
   } catch (e) {
     console.error('Failed to update catalog reward on-chain:', e);
-    // rollback DB update ke nilai sebelumnya
+    // Rollback DB update to previous values
     await supabase
       .from('contracts')
       .update({

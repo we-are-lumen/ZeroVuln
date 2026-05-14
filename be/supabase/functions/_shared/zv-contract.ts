@@ -30,7 +30,7 @@ export function findingUuidToId(findingUuid: string): string {
 }
 
 export function reward0gToWei(amount0g: number | string): bigint {
-  // amount0g dianggap unit token (contoh: 5 = 5 0g)
+  // amount0g is considered a token unit (e.g., 5 = 5 0g)
   return parseEther(String(amount0g ?? 0));
 }
 

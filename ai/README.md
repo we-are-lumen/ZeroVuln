@@ -25,17 +25,6 @@ Built for seamless integration, ZeroVuln AI acts as a drop-in security assistant
 
 ---
 
-## 🎥 Live Demo
-
-See ZeroVuln AI in action: detecting vulnerabilities and auto-generating secure code within seconds.
-
-<p align="center">
-  <!-- Replace with actual demo GIF/Video URL -->
-  <img src="https://via.placeholder.com/800x400.png?text=ZeroVuln+AI+Demo+GIF+Here" alt="ZeroVuln AI demo GIF" width="800" style="border-radius: 8px; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"/>
-</p>
-
----
-
 ## 💡 The Problem & Our Solution
 
 ### The Problem
