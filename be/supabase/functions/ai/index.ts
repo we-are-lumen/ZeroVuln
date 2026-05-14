@@ -3,7 +3,7 @@ import { submitComputeJob } from '../_shared/og-storage.ts';
 
 // constant AI System Prompt
 const AI_CODEGEN_SYSTEM_PROMPT = "Target: Lead Blockchain Security Architect & Smart Contract Auditor.\nRole: Generate high-security Solidity smart contracts and provide a detailed forensic trace of an averted attack.\n\nOperational Rules:\n1. Standards: Solidity ^0.8.20, OpenZeppelin (AccessControl, ReentrancyGuard, SafeERC20).\n2. Patterns: Checks-Effects-Interactions, Pull-over-Push.\n3. Output Requirement: Valid JSON only. Do NOT use markdown code blocks, backticks, or any conversational text.\n\nCRITICAL WORKFLOW:\nStep 1: Generate a production-ready Solidity contract.\nStep 2: Identify specific mitigations within the code (line-by-line).\nStep 3: Simulate a 'Flow Tracing' of a failed hack attempt against this specific implementation.\n\nJSON Structure:\n{\n  \"code\": \"string (Single line string. Use \\n for newlines. Escape all internal quotes)\",\n  \"vulnerability_mitigations\": [\n    {\n      \"name\": \"string\",\n      \"reason\": \"string\",\n      \"start_line\": number,\n      \"end_line\": number\n    }\n  ]\n}\n\nConstraint: The response must be a single, raw JSON object. If you include any text outside the JSON braces, the system will fail.";
-const AI_CODEAUDIT_SYSTEM_PROMPT = "Role: You are a Senior Smart Contract Auditor. Analyze the provided raw Solidity string for vulnerabilities and provide a production-ready fix.\n\nInput: A raw UTF-8 string of Solidity code.\n\nProtocol:\n1. Index: Internally treat the string as a list of lines starting at line 1.\n2. Audit: Identify Critical (Reentrancy, Logic), High (Access Control), Medium (Arithmetic, DoS), and Low (Gas, NatSpec) issues.\n3. Remediate: Create a `code_fixed` version using OpenZeppelin standards and the Checks-Effects-Interactions (CEI) pattern.\n4. Map: Track exactly which lines in the original code the vulnerabilities and fixes correspond to.\n\nOutput Rules (STRICT):\n* JSON ONLY. Your entire response must be a single, valid JSON object.\n* NO MARKDOWN WRAPPERS. Do not use `json or ` blocks.\n* Start your response directly with `{` and end with `}`.\n* NO CONVERSATIONAL TEXT.\n* LINE ACCURACY. `start_line` and `end_line` must match the 1-based index of the input string exactly.\n* VERBATIM FIX. `suggested_code` must be an exact substring/extract from your `code_fixed`.\n\nJSON Schema:\n\n```json\n{\n  \"code_fixed\": \"string (The raw string corrected and secured smart contract code)\",\n  \"vulnerabilities\": [\n    {\n      \"name\": \"string\",\n      \"reasoning_trace\": [\"string (Step-by-step PoC referencing line numbers)\"],\n      \"start_line\": number,\n      \"end_line\": number,\n      \"severity\": \"<critical or high or medium or low or info>\",\n      \"confidence\": number,\n      \"suggested_code\": \"string\"\n    }\n  ],\n  \"attack_trace\": {\n    \"traceId\": \"string (hex)\",\n    \"nodes\": [\n      {\n        \"id\": \"string\",\n        \"label\": \"string\",\n        \"type\": \"string\",\n        \"address\": \"string\"\n      }\n    ],\n    \"edges\": [\n      {\n        \"from\": \"string\",\n        \"to\": \"string\",\n        \"action\": \"string\",\n        \"value\": \"string (optional)\",\n        \"status\": \"string\"\n      }\n    ],\n    \"metadata\": {\n      \"blockNumber\": number,\n      \"confidence\": number,\n      \"vulnerability\": \"string\"\n    }\n  }\n}\n\n```";
+const AI_CODEAUDIT_SYSTEM_PROMPT = "**Role:** You are a Senior Smart Contract Auditor. Analyze the provided raw Solidity string for vulnerabilities and provide a production-ready fix.\n\n**Input:** A raw UTF-8 string of Solidity code.\n\n**Protocol:**\n\n1. **Index:** Internally treat the string as a list of lines starting at line 1.\n2. **Audit:** Identify Critical (Reentrancy, Logic), High (Access Control), Medium (Arithmetic, DoS), and Low (Gas, NatSpec) issues.\n3. **Remediate:** Create a `code_fixed` version using OpenZeppelin standards and the Checks-Effects-Interactions (CEI) pattern.\n4. **Map:** Track exactly which lines in the original code the vulnerabilities and fixes correspond to.\n\n**Output Rules (STRICT):**\n\n* **JSON ONLY.** Your entire response must be a single, valid JSON object.\n* **NO MARKDOWN WRAPPERS.** Do not use `json or ` blocks.\n* **Start your response directly with `{` and end with `}`.**\n* **NO CONVERSATIONAL TEXT.**\n* **LINE ACCURACY.** `start_line` and `end_line` must match the 1-based index of the input string exactly.\n* **VERBATIM FIX.** `suggested_code` must be an exact substring/extract from your `code_fixed`.\n\n**JSON Schema:**\n\n```json\n{\n  \"code_fixed\": \"string (The raw string corrected and secured smart contract code)\",\n  \"vulnerabilities\": [\n    {\n      \"name\": \"string\",\n      \"reasoning_trace\": [\"string (Step-by-step PoC referencing line numbers)\"],\n      \"start_line\": number,\n      \"end_line\": number,\n      \"severity\": \"<critical or high or medium or low or info>\",\n      \"confidence\": number,\n      \"suggested_code\": \"string\",\n      \"attack_trace\": {\n        \"traceId\": \"string (hex)\",\n        \"nodes\": [\n          {\n            \"id\": \"string\",\n            \"label\": \"string\",\n            \"type\": \"string\",\n            \"address\": \"string\"\n          }\n        ],\n        \"edges\": [\n          {\n            \"from\": \"string\",\n            \"to\": \"string\",\n            \"action\": \"string\",\n            \"value\": \"string (optional)\",\n            \"status\": \"string\"\n          }\n        ],\n        \"metadata\": {\n          \"blockNumber\": number,\n          \"confidence\": number,\n          \"vulnerability\": \"string\"\n        }\n      }\n    }\n  ]\n}\n\n```";
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPreflight();
@@ -381,6 +381,7 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
           status: 'open',
           reasoning_trace: { vulnerability: v },
           remediation: v.suggested_code ? { suggested_code: v.suggested_code } : null,
+          attack_trace: v.attack_trace ?? null,
         }))
       : [{
           audit_id: audit.id,
@@ -393,7 +394,7 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
     const { data: inserted, error: findingError } = await supabase
       .from('ai_findings')
       .insert(findings)
-      .select('uuid, severity, title, description, line_start, line_end, confidence, status');
+      .select('uuid, severity, title, description, line_start, line_end, confidence, status, attack_trace');
 
     if (findingError) {
       console.error('Failed to insert ai_findings:', findingError);
@@ -406,7 +407,6 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
         status: 'succeeded',
         completed_at: new Date().toISOString(),
         summary: parsed.code_fixed ? 'Audit completed with suggested fixes' : 'Audit completed',
-        attack_trace: parsed.attack_trace ?? null,
       })
       .eq('id', audit.id);
 
@@ -415,7 +415,6 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
       audit_id: audit.uuid,
       code_fixed: parsed.code_fixed,
       findings: inserted,
-      attack_trace: parsed.attack_trace,
     }, 200);
   } catch (e) {
     console.error('Audit job failed:', e);
@@ -441,18 +440,18 @@ interface AuditVulnerability {
   confidence?: number;
   reasoning_trace?: string[];
   suggested_code?: unknown;
+  attack_trace?: unknown;
 }
 
-function parseAuditResponse(aiData: unknown): { code_fixed: string; vulnerabilities: AuditVulnerability[]; attack_trace: unknown } {
+function parseAuditResponse(aiData: unknown): { code_fixed: string; vulnerabilities: AuditVulnerability[] } {
   const payload = extractAIContent(aiData);
   if (payload && typeof payload === 'object') {
-    const p = payload as { code_fixed?: unknown; vulnerabilities?: unknown; attack_trace?: unknown };
+    const p = payload as { code_fixed?: unknown; vulnerabilities?: unknown };
     const code_fixed = typeof p.code_fixed === 'string' ? p.code_fixed : '';
     const vulnerabilities = Array.isArray(p.vulnerabilities) ? p.vulnerabilities as AuditVulnerability[] : [];
-    const attack_trace = p.attack_trace ?? null;
-    return { code_fixed, vulnerabilities, attack_trace };
+    return { code_fixed, vulnerabilities };
   }
-  return { code_fixed: '', vulnerabilities: [], attack_trace: null };
+  return { code_fixed: '', vulnerabilities: [] };
 }
 
 async function handleAutoFix(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
