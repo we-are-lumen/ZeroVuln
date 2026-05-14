@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { useGenerateSmartContract } from "./hooks/use-generate-smart-contract";
 import { ChangeEvent, useState, KeyboardEvent, useRef, useEffect } from "react";
 import { payForFeature } from "@/shared/lib/zv-contract";
+import { useMutation } from "@tanstack/react-query";
 
 const CodeGenPage = () => {
   const router = useRouter();
@@ -29,23 +30,16 @@ const CodeGenPage = () => {
   const handlePromptChange = (e: ChangeEvent<HTMLTextAreaElement>) =>
     setPrompt(e.target.value);
 
-  const handleGenerate = async () => {
-    if (prompt.trim().length <= 1) {
-      toast.error("Please provide a more detailed description.");
-      return;
-    }
-
-    try {
-      // Bayar 0.1 0g (fee on-chain) sebelum menggunakan fitur CodeGen
-      await toast.promise(payForFeature("CodeGen", `codegen:${Date.now()}`), {
-        loading: "Memproses pembayaran 0.1 0g...",
-        success: () => "Pembayaran berhasil.",
-        error: (err: unknown) =>
-          err instanceof Error ? err.message : "Pembayaran gagal.",
-      });
+  const { mutate: pay, isPending: isPaying } = useMutation({
+    mutationFn: () => payForFeature("CodeGen", `codegen:${Date.now()}`),
+    onMutate: () => {
+      toast.loading("Processing payment of 0.1 0g...", { id: "pay-toast" });
+    },
+    onSuccess: () => {
+      toast.success("Pembayaran berhasil.", { id: "pay-toast" });
 
       toast.promise(generate({ prompt }), {
-        loading: "AI is crafting your Solidity contract...",
+        loading: "AI is crafting your smart contract...",
         success: (data) => {
           if (!data.generated_code || data.generated_code.length <= 1) {
             throw new Error("Generation failed: Empty code received.");
@@ -54,15 +48,23 @@ const CodeGenPage = () => {
           router.push(`${APP_PATH.dashboard.codeGen}/${data.contract_id}`);
           return "Contract generated successfully!";
         },
-        error: (err: Error) => {
-          return (
-            err.message || "Failed to generate smart contract. Please try again."
-          );
-        },
+        error: (err: Error) =>
+          err.message || "Failed to generate smart contract.",
       });
-    } catch {
-      // toast sudah handle error message
+    },
+    onError: () => {
+      const message = "Payment failed";
+      toast.error(message, { id: "pay-toast" });
+    },
+  });
+
+  const handleGenerate = async () => {
+    if (prompt.trim().length <= 1) {
+      toast.error("Please provide a more detailed description.");
+      return;
     }
+
+    pay();
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -94,19 +96,19 @@ const CodeGenPage = () => {
           value={prompt}
           onChange={handlePromptChange}
           onKeyDown={handleKeyDown}
-          disabled={isPending}
+          disabled={isPending || isPaying}
           className="w-full resize-none overflow-y-auto border-none bg-transparent text-sm leading-relaxed ring-transparent! focus-visible:ring-0 disabled:opacity-50"
           placeholder="e.g. staking pool with daily rewards, max stake 1000 tokens..."
         />
         <div className="flex justify-end">
-          <Button onClick={handleGenerate} disabled={isPending}>
+          <Button onClick={handleGenerate} disabled={isPending || isPaying}>
             <HugeiconsIcon
               icon={SparklesIcon}
               strokeWidth={2}
               size={18}
-              className={isPending ? "animate-pulse" : ""}
+              className={isPending || isPaying ? "animate-pulse" : ""}
             />
-            {isPending ? "Generating..." : "Generate"}
+            {isPending || isPaying ? "Generating..." : "Generate"}
           </Button>
         </div>
       </section>
