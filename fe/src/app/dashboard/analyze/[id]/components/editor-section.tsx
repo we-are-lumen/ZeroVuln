@@ -45,8 +45,6 @@ const EditorSection = ({
     }
   };
 
-  console.log(data);
-
   const handleAnalyze = async () => {
     try {
       await toast.promise(payForFeature("Analyze", `analyze:${Date.now()}`), {

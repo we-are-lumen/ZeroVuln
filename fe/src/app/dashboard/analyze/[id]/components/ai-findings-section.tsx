@@ -106,6 +106,7 @@ const AiFindingsSection = ({
         line_start,
         line_end,
         remediation,
+        confidence,
       }) => {
         const snippet = getSnippet(line_start, line_end);
         const isMultiLine = line_end !== line_start;
@@ -135,6 +136,10 @@ const AiFindingsSection = ({
                 <span className="text-mist-400">Line</span>{" "}
                 <span className="font-semibold text-primary">
                   {line_start} {isMultiLine ? `- ${line_end}` : null}
+                </span>
+                <span className="text-mist-400"> · Confidence </span>
+                <span className="font-semibold text-primary">
+                  {confidence ? confidence / 100 : 0}%
                 </span>
               </p>
             </div>
