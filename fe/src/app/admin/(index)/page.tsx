@@ -225,7 +225,7 @@ const AdminDashboardPage = () => {
                     <DialogContent className="flex max-h-[80vh] w-fit flex-col">
                       <DialogHeader>
                         <DialogTitle className="flex items-center gap-2">
-                          <span>Code Review: {inspectedFinding?.title}</span>
+                          <span>{inspectedFinding?.title}</span>
                         </DialogTitle>
                       </DialogHeader>
 
@@ -249,7 +249,7 @@ const AdminDashboardPage = () => {
 
                       <div className="relative w-[50vw] grow overflow-auto rounded-md border border-mist-800 bg-zinc-950">
                         <div className="sticky top-0 z-10 border-b border-mist-800 bg-zinc-900 px-4 py-2 font-mono text-xs text-mist-400">
-                          {inspectedFinding?.contracts?.name}?
+                          {inspectedFinding?.contracts?.name}
                         </div>
 
                         <SyntaxHighlighter
