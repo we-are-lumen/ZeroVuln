@@ -24,8 +24,8 @@ Notes:
 
 ```bash
 export PROJECT_REF="kqhhscjatrodmtprccce"
-export SUPABASE_ANON_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtxaGhzY2phdHJvZG10cHJjY2NlIiwicm9sZSI6ImFub24iLCJpYXQiOjE3Nzg0NjA5MzMsImV4cCI6MjA5NDAzNjkzM30.YExGppnWmcf8o6rEJFrgsY4x2zJNVP-Pmh3S7jT7Q28"
-export X_WALLET_ADDRESS="0x8540784B5FCcEb3045d1bc1f74919C7c41C12Fd6"
+export SUPABASE_ANON_KEY="eyJh..."
+export X_WALLET_ADDRESS="0x8540..."
 export BASE_URL="https://${PROJECT_REF}.supabase.co/functions/v1"
 ```
 
