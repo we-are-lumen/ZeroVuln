@@ -10,6 +10,7 @@ import { useRouter } from "next/navigation";
 import React, { KeyboardEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import useAnalyzeSmartContract from "./hooks/use-analyze-smart-contract";
+import { useMutation } from "@tanstack/react-query";
 
 const AnalyzePage = () => {
   const [code, setCode] = useState("");
@@ -45,21 +46,15 @@ const AnalyzePage = () => {
     reader.readAsText(file);
   };
 
-  const handleAnalyze = async () => {
-    if (!code.trim()) {
-      toast.error("Please provide some contract code to analyze");
-      return;
-    }
+  const { mutate: pay, isPending: isPaying } = useMutation({
+    mutationFn: () => payForFeature("Analyze", `analyze:${Date.now()}`),
+    onMutate: () => {
+      toast.loading("Processing payment of 0.1 0g...", { id: "analyze-pay" });
+    },
+    onSuccess: () => {
+      toast.success("Payment successful", { id: "analyze-pay" });
 
-    try {
-      await toast.promise(payForFeature("Analyze", `analyze:${Date.now()}`), {
-        loading: "Processing payment of 0.1 0g...",
-        success: () => "Payment sucessful",
-        error: (err: unknown) =>
-          err instanceof Error ? err.message : "Payment failed",
-      });
-
-      await toast.promise(analyze({ code }), {
+      toast.promise(analyze({ code }), {
         loading: "Analyzing smart contract...",
         success: (data) => {
           router.push(`${APP_PATH.dashboard.analyze}/${data.contract_id}`);
@@ -70,9 +65,20 @@ const AnalyzePage = () => {
             ? err.message
             : "Failed analyzing smart contract",
       });
-    } catch {
-      // toast sudah handle
+    },
+    onError: () => {
+      const message = "Payment failed";
+      toast.error(message, { id: "analyze-pay" });
+    },
+  });
+
+  const handleAnalyze = async () => {
+    if (!code.trim()) {
+      toast.error("Please provide some contract code to analyze");
+      return;
     }
+
+    pay();
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -128,13 +134,13 @@ const AnalyzePage = () => {
               <span>Upload File</span>
             </Button>
 
-            <Button onClick={handleAnalyze} disabled={isPending}>
+            <Button onClick={handleAnalyze} disabled={isPending || isPaying}>
               <HugeiconsIcon
                 icon={ShieldBlockchainIcon}
                 size={24}
                 strokeWidth={2}
               />
-              {isPending ? "Analyzing..." : "Analyze"}
+              {isPending || isPaying ? "Analyzing..." : "Analyze"}
             </Button>
           </div>
         </div>

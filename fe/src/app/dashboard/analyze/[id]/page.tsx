@@ -29,8 +29,6 @@ const AnalyzeResultPage = () => {
 
   const [finalCode, setFinalCode] = useState(fullCode);
 
-  console.log(data);
-
   return (
     <div className="flex h-full flex-col gap-6 border p-6">
       <Breadcrumb>
