@@ -60,10 +60,10 @@ const CatalogSection = () => {
               </p>
             </div>
             <div className="mt-4 flex border-y py-2">
-              <div className="flex w-1/2 flex-col">
+              {/* <div className="flex w-1/2 flex-col">
                 <h5 className="text-xs text-mist-400">Gas</h5>
                 <p className="font-bold">{gas_eslimate ?? "-"}</p>
-              </div>
+              </div> */}
               <div className="flex w-1/2 flex-col">
                 <h5 className="text-xs text-mist-400">Reward</h5>
                 <p className="font-bold">{reward_per_finding ?? "0"} 0G</p>
