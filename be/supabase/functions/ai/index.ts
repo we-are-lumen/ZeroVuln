@@ -28,6 +28,16 @@ Output Rules (STRICT):
     - Must start with "function <name>"
     - Must include the full body with balanced braces.
     - Must NOT include any extra closing brace that belongs OUTSIDE the function.
+- ATTACK TRACE (MANDATORY):
+  - For EACH vulnerability with severity in {critical, high, medium}, you MUST output a non-empty attack_trace.
+  - attack_trace MUST describe a realistic attacker flow against THIS contract in a step-by-step manner (setup → trigger → exploit loop/abuse → outcome).
+  - attack_trace.nodes MUST contain at least 4 nodes, including:
+    1) an attacker EOA,
+    2) an attacker contract (if applicable),
+    3) the victim contract,
+    4) the vulnerable function (as a Function node).
+  - attack_trace.edges MUST contain at least 3 edges and MUST reference node ids in nodes[].id.
+  - Include a narrative steps list in attack_trace.metadata.steps (>= 4 steps). Each step must explain what happens and why it succeeds.
 
 JSON Schema:
 {
@@ -51,7 +61,21 @@ JSON Schema:
         "traceId": "string",
         "nodes": [{ "id": "string", "label": "string", "type": "string", "address": "string" }],
         "edges": [{ "from": "string", "to": "string", "action": "string", "value": "string", "status": "string" }],
-        "metadata": { "blockNumber": number, "confidence": number, "vulnerability": "string" }
+        "metadata": {
+          "blockNumber": number,
+          "confidence": number,
+          "vulnerability": "string",
+          "steps": [
+            {
+              "step": number,
+              "title": "string",
+              "description": "string",
+              "from": "string (node id, optional)",
+              "to": "string (node id, optional)",
+              "action": "string (optional)"
+            }
+          ]
+        }
       }
     }
   ]

@@ -32,15 +32,17 @@ export const AttackTraceModal = ({
   traceData,
 }: AttackTraceModalProps) => {
   // Map API data to React Flow format
-  const { nodes, edges } = useMemo(() => {
-    if (!traceData) return { nodes: [], edges: [] };
+  const { nodes, edges, traceId, steps } = useMemo(() => {
+    if (!traceData) return { nodes: [], edges: [], traceId: "-", steps: [] as any[] };
 
     // Support slight schema differences (e.g. nested attack_trace).
     const payload = traceData?.nodes || traceData?.edges ? traceData : traceData?.attack_trace;
-    if (!payload) return { nodes: [], edges: [] };
+    if (!payload) return { nodes: [], edges: [], traceId: "-", steps: [] as any[] };
 
     const rawNodes = Array.isArray(payload?.nodes) ? payload.nodes : [];
     const rawEdges = Array.isArray(payload?.edges) ? payload.edges : [];
+    const traceId = String(payload?.traceId ?? "-");
+    const steps = Array.isArray(payload?.metadata?.steps) ? payload.metadata.steps : [];
 
     const rfNodes: Node[] = rawNodes.map((node: any, index: number) => ({
       id: String(node?.id ?? `n-${index}`),
@@ -81,7 +83,7 @@ export const AttackTraceModal = ({
       // ReactFlow butuh source/target valid.
       .filter((e: Edge) => e.source && e.target);
 
-    return { nodes: rfNodes, edges: rfEdges };
+    return { nodes: rfNodes, edges: rfEdges, traceId, steps };
   }, [traceData]);
 
   return (
@@ -98,21 +100,65 @@ export const AttackTraceModal = ({
               </p>
             </div>
           </DialogHeader>
-          <ReactFlow nodes={nodes} edges={edges} fitView colorMode="dark">
-            <Background
-              color="#1e293b"
-              variant={BackgroundVariant.Lines}
-              gap={25}
-              size={1}
-            />
-            <Controls />
-            <Panel
-              position="top-right"
-              className="rounded border border-mist-800 bg-mist-900 p-2 text-[10px] text-mist-400"
-            >
-              Trace ID: {traceData?.traceId ?? traceData?.attack_trace?.traceId ?? "-"}
-            </Panel>
-          </ReactFlow>
+          <div className="flex h-full min-h-0 w-full">
+            <div className="flex min-h-0 flex-1">
+              <ReactFlow nodes={nodes} edges={edges} fitView colorMode="dark">
+                <Background
+                  color="#1e293b"
+                  variant={BackgroundVariant.Lines}
+                  gap={25}
+                  size={1}
+                />
+                <Controls />
+                <Panel
+                  position="top-right"
+                  className="rounded border border-mist-800 bg-mist-900 p-2 text-[10px] text-mist-400"
+                >
+                  Trace ID: {traceId}
+                </Panel>
+              </ReactFlow>
+            </div>
+
+            <aside className="hidden w-[320px] shrink-0 border-l border-mist-800 bg-mist-950/40 p-3 md:block">
+              <div className="mb-2 flex items-center justify-between">
+                <p className="text-xs font-bold text-mist-300 uppercase">Attack Steps</p>
+                <p className="text-[10px] text-mist-500">{steps?.length ?? 0} steps</p>
+              </div>
+
+              <div className="custom-scrollbar h-full overflow-y-auto pr-1">
+                {Array.isArray(steps) && steps.length > 0 ? (
+                  <ol className="space-y-2">
+                    {steps.map((s: any, idx: number) => (
+                      <li
+                        key={idx}
+                        className="rounded border border-mist-800 bg-mist-900/40 p-2"
+                      >
+                        <div className="flex items-start justify-between gap-2">
+                          <p className="text-[11px] font-semibold text-mist-200">
+                            {typeof s?.step === "number" ? `#${s.step}` : `#${idx + 1}`}{" "}
+                            {String(s?.title ?? "Step")}
+                          </p>
+                        </div>
+                        <p className="mt-1 text-[10px] leading-relaxed text-mist-400">
+                          {String(s?.description ?? "")}
+                        </p>
+                        {(s?.action || (s?.from && s?.to)) && (
+                          <p className="mt-2 text-[10px] text-mist-500">
+                            {s?.from && s?.to ? `${s.from} → ${s.to}` : null}
+                            {s?.action ? ` • ${String(s.action)}` : null}
+                          </p>
+                        )}
+                      </li>
+                    ))}
+                  </ol>
+                ) : (
+                  <p className="text-xs text-mist-500">
+                    No step-by-step trace returned. Please re-run Analyze.
+                  </p>
+                )}
+              </div>
+            </aside>
+          </div>
         </div>
       </DialogContent>
     </Dialog>

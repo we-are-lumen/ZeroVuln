@@ -20,6 +20,16 @@ export interface AttackTraceMetadata {
     confidence: number;
     blockNumber: number;
     vulnerability: string;
+    steps?: AttackTraceStep[];
+}
+
+export interface AttackTraceStep {
+    step: number;
+    title: string;
+    description: string;
+    from?: string;
+    to?: string;
+    action?: string;
 }
 export interface AttackTrace {
     traceId: string;
