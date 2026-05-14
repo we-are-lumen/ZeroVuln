@@ -406,6 +406,7 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
         status: 'succeeded',
         completed_at: new Date().toISOString(),
         summary: parsed.code_fixed ? 'Audit completed with suggested fixes' : 'Audit completed',
+        attack_trace: parsed.attack_trace ?? null,
       })
       .eq('id', audit.id);
 
