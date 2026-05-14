@@ -229,7 +229,7 @@ const AiFindingsSection = ({
   );
 
   return (
-    <section className="flex h-full basis-[30%] flex-col rounded-2xl border border-mist-800 bg-mist-900/50">
+    <section className="flex h-full grow-0 basis-[30%] flex-col overflow-x-auto rounded-2xl border border-mist-800 bg-mist-900/50">
       <div className="border-b border-mist-800 p-3">
         <div className="flex items-center gap-2 text-mist-400">
           <HugeiconsIcon icon={Shield02Icon} size={20} strokeWidth={2} />

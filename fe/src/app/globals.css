@@ -131,7 +131,7 @@
 
 body {
   ::-webkit-scrollbar {
-    @apply w-1;
+    @apply h-1! w-1;
   }
 
   ::-webkit-scrollbar-track {
