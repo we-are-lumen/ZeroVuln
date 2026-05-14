@@ -59,7 +59,38 @@ JSON Schema:
 `.trim();
 
 // constant AI System Prompt
-const AI_CODEGEN_SYSTEM_PROMPT = "Target: Lead Blockchain Security Architect & Smart Contract Auditor.\nRole: Generate high-security Solidity smart contracts and provide a detailed forensic trace of an averted attack.\n\nOperational Rules:\n1. Standards: Solidity ^0.8.20, OpenZeppelin (AccessControl, ReentrancyGuard, SafeERC20).\n2. Patterns: Checks-Effects-Interactions, Pull-over-Push.\n3. Output Requirement: Valid JSON only. Do NOT use markdown code blocks, backticks, or any conversational text.\n\nCRITICAL WORKFLOW:\nStep 1: Generate a production-ready Solidity contract.\nStep 2: Identify specific mitigations within the code (line-by-line).\nStep 3: Simulate a 'Flow Tracing' of a failed hack attempt against this specific implementation.\n\nJSON Structure:\n{\n  \"contract_name\": \"string (Short PascalCase name for this contract, e.g. MyToken, RoyaltyNFT)\",\n  \"code\": \"string (Single line string. Use \\n for newlines. Escape all internal quotes)\",\n  \"vulnerability_mitigations\": [\n    {\n      \"name\": \"string\",\n      \"reason\": \"string\",\n      \"start_line\": number,\n      \"end_line\": number\n    }\n  ]\n}\n\nConstraint: The response must be a single, raw JSON object. If you include any text outside the JSON braces, the system will fail.";
+const AI_CODEGEN_SYSTEM_PROMPT = `
+Role: Lead Blockchain Security Architect & Smart Contract Auditor.
+
+Task: Generate a production-ready Solidity smart contract AND report the security mitigations you included.
+
+Hard Requirements:
+1) Solidity ^0.8.20.
+2) Use OpenZeppelin where appropriate (AccessControl, ReentrancyGuard, SafeERC20).
+3) Use CEI + Pull-over-Push patterns where relevant.
+
+Output Rules (STRICT):
+- JSON ONLY. Return a single JSON object. No markdown, no backticks, no extra text.
+- The field "code" MUST be the full Solidity source as a string using "\\n" for newlines.
+- LINE ACCURACY: The mitigation line numbers MUST reference the generated "code" string (1-based line index).
+- For each mitigation, "excerpt" MUST be exactly the lines from "code" for start_line..end_line joined with "\\n".
+- Keep "vulnerability_mitigations" concise: max 8 items. Prefer high-impact security mitigations only.
+
+JSON Schema:
+{
+  "contract_name": "string (Short PascalCase, e.g. MyToken, RoyaltyNFT)",
+  "code": "string",
+  "vulnerability_mitigations": [
+    {
+      "name": "string",
+      "reason": "string",
+      "start_line": number,
+      "end_line": number,
+      "excerpt": "string"
+    }
+  ]
+}
+`.trim();
 const AI_CODEAUDIT_SYSTEM_PROMPT = "**Role:** You are a Senior Smart Contract Auditor.\n\n**Task:** Analyze the provided raw Solidity string for vulnerabilities and provide a production-ready fix.\n\n**Input:** A raw UTF-8 string of Solidity code.\n\n**Protocol:**\n\n1. **Index:** Treat the input as a list of lines starting at line 1.\n2. **Audit:** Identify Critical (Reentrancy, Logic), High (Access Control), Medium (Arithmetic, DoS), and Low (Gas, NatSpec) issues.\n3. **Remediate:** Produce a full `code_fixed` version using OpenZeppelin standards and the Checks-Effects-Interactions (CEI) pattern.\n4. **Patch Instructions (IMPORTANT):** For each vulnerability, output a deterministic `patch` object describing exactly what to change. This patch is what the frontend will apply.\n\n**Output Rules (STRICT):**\n\n* **JSON ONLY.** Your entire response must be a single, valid JSON object.\n* **NO MARKDOWN WRAPPERS.** Do not use `json or ` blocks.\n* **Start your response directly with `{` and end with `}`.**\n* **NO CONVERSATIONAL TEXT.**\n* **LINE ACCURACY.** `start_line` and `end_line` must match the 1-based index of the ORIGINAL input string.\n* **PATCH ACCURACY.** `patch.start_line` and `patch.end_line` must point to the exact lines in the ORIGINAL input that should be edited.\n* **REPLACE MUST PRESERVE BLOCK SHAPE.** When `patch.op` is `replace`, `patch.replacement` MUST contain the FULL replacement block for lines `patch.start_line..patch.end_line`, including any unchanged lines. The number of lines in `patch.replacement` must equal `(patch.end_line - patch.start_line + 1)`.\n* **VERBATIM REPLACEMENT.** `patch.replacement` must be final Solidity code (may be multi-line). Do not output partial snippets for a multi-line replace.\n\n**JSON Schema:**\n\n{\n  \"code_fixed\": \"string\",\n  \"vulnerabilities\": [\n    {\n      \"name\": \"string\",\n      \"reasoning_trace\": [\"string\"],\n      \"start_line\": number,\n      \"end_line\": number,\n      \"severity\": \"critical|high|medium|low|info\",\n      \"confidence\": number,\n      \"patch\": {\n        \"op\": \"replace|insert_before|insert_after|delete\",\n        \"start_line\": number,\n        \"end_line\": number,\n        \"replacement\": \"string\"\n      },\n      \"attack_trace\": { ... }\n    }\n  ]\n}\n";
 
 Deno.serve(async (req: Request) => {
@@ -237,6 +268,51 @@ function parseAIResponse(aiData: unknown) {
   return { contract_name: null, code: typeof payload === 'string' ? payload : '', mitigations: [], raw: payload };
 }
 
+type CodegenMitigation = {
+  name: string;
+  reason: string;
+  start_line: number;
+  end_line: number;
+  excerpt?: string;
+};
+
+function normalizeCodegenMitigations(
+  mitigations: unknown[],
+  codeLines: string[],
+): CodegenMitigation[] {
+  const maxItems = 8;
+  const out: CodegenMitigation[] = [];
+
+  for (const m of mitigations) {
+    if (!m || typeof m !== 'object') continue;
+    const mm = m as Record<string, unknown>;
+    const name = typeof mm.name === 'string' ? mm.name.trim() : '';
+    const reason = typeof mm.reason === 'string' ? mm.reason.trim() : '';
+    const start = mm.start_line;
+    const end = mm.end_line;
+    const excerpt = typeof mm.excerpt === 'string' ? mm.excerpt : undefined;
+
+    if (!name || !reason) continue;
+    if (typeof start !== 'number' || typeof end !== 'number') continue;
+    if (!Number.isInteger(start) || !Number.isInteger(end)) continue;
+    if (start < 1 || end < start || end > codeLines.length) continue;
+
+    // Keep ranges reasonably small to avoid noisy/incorrect broad claims.
+    if (end - start + 1 > 80) continue;
+
+    const expectedExcerpt = codeLines.slice(start - 1, end).join('\n');
+    if (excerpt !== undefined) {
+      // Strict match (prompt requires exact). If mismatch, drop.
+      if (excerpt !== expectedExcerpt) continue;
+    }
+
+    out.push({ name, reason, start_line: start, end_line: end, excerpt: expectedExcerpt });
+    if (out.length >= maxItems) break;
+  }
+
+  return out;
+}
+
 async function handleCodegen(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
   const { prompt, contract_id } = body;
 
@@ -315,20 +391,21 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
     const aiData = await aiResponse.json();
     const parsed = parseAIResponse(aiData);
     const generatedCode = parsed.code || '';
-    const mitigations = parsed.mitigations;
+    const codeLines = generatedCode ? generatedCode.split(/\r?\n/) : [];
+    const mitigations = normalizeCodegenMitigations(parsed.mitigations, codeLines);
     const suggestedName =
       parsed.contract_name ||
       (generatedCode ? extractPrimaryContractName(generatedCode) : null);
 
     // Insert ai_findings for each vulnerability mitigation
-    if (Array.isArray(mitigations) && mitigations.length > 0) {
-      const findings = mitigations.map((mitigation: Record<string, unknown>) => ({
+    if (mitigations.length > 0) {
+      const findings = mitigations.map((mitigation) => ({
         audit_id: audit.id,
         severity: 'info',
-        title: (typeof mitigation.name === 'string' && mitigation.name) || 'Vulnerability Mitigation',
-        description: typeof mitigation.reason === 'string' ? mitigation.reason : '',
-        line_start: typeof mitigation.start_line === 'number' ? mitigation.start_line : null,
-        line_end: typeof mitigation.end_line === 'number' ? mitigation.end_line : null,
+        title: mitigation.name || 'Vulnerability Mitigation',
+        description: mitigation.reason || '',
+        line_start: mitigation.start_line ?? null,
+        line_end: mitigation.end_line ?? null,
         status: 'open',
         reasoning_trace: { mitigation },
       }));
