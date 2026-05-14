@@ -48,7 +48,7 @@ function normalizeSourceCode(value: unknown): Record<string, unknown>[] | null {
 async function handleListContracts(auth: { user_id: number; is_admin: boolean }) {
   const { data, error } = await supabase
     .from('contracts')
-    .select('uuid, name, source_code, is_catalog, status, gas_estimate, language, reward_per_finding, expired_at, created_at, updated_at, audits(uuid, status, kind, created_at)')
+    .select('uuid, name, source_code, is_catalog, status, hash_sc, gas_estimate, language, reward_per_finding, expired_at, created_at, updated_at, audits(uuid, status, kind, created_at)')
     .eq('owner_id', auth.user_id)
     .eq('is_catalog', false)
     .order('created_at', { ascending: false });
@@ -61,7 +61,7 @@ async function handleGetContract(auth: { user_id: number; is_admin: boolean }, i
   const { data, error } = await supabase
     .from('contracts')
     .select(`
-      uuid, name, source_code, owner_id, is_catalog, status, gas_estimate, language, reward_per_finding, expired_at, created_at, updated_at,
+      uuid, name, source_code, owner_id, is_catalog, status, hash_sc, gas_estimate, language, reward_per_finding, expired_at, created_at, updated_at,
       audits(
         uuid, status, kind, summary, started_at, completed_at, created_at,
         ai_findings(uuid, severity, title, description, line_start, line_end, confidence, gas_saved, status, reasoning_trace, remediation, attack_trace, created_at)
@@ -128,6 +128,7 @@ async function handleUpdateContract(req: Request, auth: { user_id: number }, id:
   }
   if (body.language !== undefined) updates.language = body.language;
   if (body.status !== undefined) updates.status = body.status;
+  if (body.hash_sc !== undefined) updates.hash_sc = body.hash_sc;
   if (body.expired_at !== undefined) updates.expired_at = body.expired_at;
 
   const { data, error } = await supabase

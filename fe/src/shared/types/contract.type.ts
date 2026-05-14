@@ -67,6 +67,7 @@ export type Contract = {
     language: string
     name: string
     status: string
+    hash_sc?: string | null
     gas_eslimate: number | null
     reward_per_finding: number
     is_catalog: boolean

@@ -9,6 +9,7 @@ import useQueryContractDetail from "@/app/dashboard/code-gen/[id]/hooks/use-quer
 import { Button } from "@/shared/components/ui/button";
 import { deploySolidityContractFromSource } from "@/shared/lib/solidity/deploy";
 import { payForFeature } from "@/shared/lib/zv-contract";
+import contractService from "@/api/services/contracts.service";
 import {
   AnchorPointIcon,
   CopyIcon,
@@ -27,6 +28,12 @@ const normalizeContractLabel = (name?: string | null) => {
     return { title: base.slice(0, -4) || "Contract", ext: ".sol" };
   }
   return { title: base, ext: ".sol" };
+};
+
+const formatHash = (hash?: string | null) => {
+  if (!hash) return "";
+  if (hash.length <= 12) return hash;
+  return `${hash.slice(0, 8)}...${hash.slice(-4)}`;
 };
 
 const EditorSection = ({
@@ -112,8 +119,31 @@ const EditorSection = ({
       try {
         await navigator.clipboard.writeText(res.address);
       } catch {}
+
+      // Update contract status + deployment tx hash
+      if (contractId) {
+        try {
+          await contractService.updateContract(contractId, {
+            status: "deployed",
+            hash_sc: res.txHash ?? null,
+          });
+          refetch();
+        } catch (e) {
+          console.warn("Failed to sync deployed status:", e);
+        }
+      }
     } finally {
       setIsDeploying(false);
+    }
+  };
+
+  const handleCopyHash = async () => {
+    if (!data?.hash_sc) return;
+    try {
+      await navigator.clipboard.writeText(data.hash_sc);
+      toast.success("Transaction hash copied to clipboard");
+    } catch {
+      toast.error("Failed to copy transaction hash");
     }
   };
 
@@ -131,6 +161,21 @@ const EditorSection = ({
                 <span className="rounded border border-mist-700 bg-mist-950/40 px-2 py-0.5 font-mono text-[10px] text-mist-400">
                   {ext}
                 </span>
+                {data?.status === "deployed" && (
+                  <span className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-medium text-emerald-300">
+                    deployed
+                  </span>
+                )}
+                {data?.hash_sc && (
+                  <button
+                    type="button"
+                    onClick={handleCopyHash}
+                    className="rounded border border-mist-700 bg-mist-950/40 px-2 py-0.5 font-mono text-[10px] text-mist-400 hover:text-mist-200"
+                    title="Copy transaction hash"
+                  >
+                    {formatHash(data.hash_sc)}
+                  </button>
+                )}
               </>
             );
           })()}
