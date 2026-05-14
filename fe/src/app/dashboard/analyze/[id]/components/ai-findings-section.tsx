@@ -132,6 +132,21 @@ const AiFindingsSection = ({
         );
         return;
       }
+
+      const originalBlock = lines.slice(startIndex, endIndex + 1).join("\n");
+      const countBraces = (s: string) => ({
+        open: (s.match(/\{/g) || []).length,
+        close: (s.match(/\}/g) || []).length,
+      });
+      const o = countBraces(originalBlock);
+      const r = countBraces(replacementLines.join("\n"));
+      if (o.open !== r.open || o.close !== r.close) {
+        toast.warning(
+          "Auto-apply unavailable: replacement changes brace structure. Please re-run Analyze.",
+        );
+        return;
+      }
+
       lines.splice(startIndex, endIndex - startIndex + 1, ...replacementLines);
       setFinalCode(lines.join("\n"));
       toast.success("Fix applied successfully!");
