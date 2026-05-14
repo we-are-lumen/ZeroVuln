@@ -44,7 +44,7 @@ const CodeGenPage = () => {
   const { mutate: pay, isPending: isPaying } = useMutation({
     mutationFn: () => payForFeature("CodeGen", `codegen:${Date.now()}`),
     onMutate: () => {
-      toast.loading("Processing payment of 0.1 0g...", { id: "pay-toast" });
+      toast.loading("Processing payment", { id: "pay-toast" });
     },
     onSuccess: () => {
       toast.success("Pembayaran berhasil.", { id: "pay-toast" });

@@ -11,8 +11,19 @@ import React, { KeyboardEvent, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import useAnalyzeSmartContract from "./hooks/use-analyze-smart-contract";
 import { useMutation } from "@tanstack/react-query";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/shared/components/ui/alert-dialog";
 
 const AnalyzePage = () => {
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
   const [code, setCode] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
@@ -49,7 +60,7 @@ const AnalyzePage = () => {
   const { mutate: pay, isPending: isPaying } = useMutation({
     mutationFn: () => payForFeature("Analyze", `analyze:${Date.now()}`),
     onMutate: () => {
-      toast.loading("Processing payment of 0.1 0g...", { id: "analyze-pay" });
+      toast.loading("Processing payment of", { id: "analyze-pay" });
     },
     onSuccess: () => {
       toast.success("Payment successful", { id: "analyze-pay" });
@@ -78,6 +89,11 @@ const AnalyzePage = () => {
       return;
     }
 
+    setIsConfirmOpen(true);
+  };
+
+  const handleConfirmPay = () => {
+    setIsConfirmOpen(false);
     pay();
   };
 
@@ -144,6 +160,31 @@ const AnalyzePage = () => {
             </Button>
           </div>
         </div>
+
+        <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+          <AlertDialogContent className="border-mist-800 bg-mist-950 text-white">
+            <AlertDialogHeader>
+              <AlertDialogTitle>Confirm Analysis</AlertDialogTitle>
+              <AlertDialogDescription className="text-mist-400">
+                Analyzing this smart contract for vulnerabilities requires a
+                network fee of
+                <span className="font-bold text-primary"> 0.1 0g</span>. Proceed
+                with the payment?
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel className="border-mist-800 bg-transparent hover:bg-mist-900 hover:text-white">
+                Cancel
+              </AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleConfirmPay}
+                className="bg-primary font-bold text-black hover:bg-primary/90"
+              >
+                Confirm & Pay
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
       </div>
     </main>
   );
