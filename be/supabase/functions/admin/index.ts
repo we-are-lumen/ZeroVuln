@@ -2,7 +2,45 @@ import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError
 import { uploadToOgStorage } from '../_shared/og-storage.ts';
 import { allocateRewardFromCatalogOnchain } from '../_shared/zv-contract.ts';
 
-Deno.serve(async (req: Request) => {
+type DenoRuntime = {
+  env: { get(name: string): string | undefined };
+  serve(handler: (req: Request) => Response | Promise<Response>): void;
+};
+
+type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+
+interface RagFindingRecord {
+  id: string;
+  contractId?: string;
+  contractHash: string;
+  contractName?: string;
+  vulnerabilityType: string;
+  severity: Severity;
+  swcId?: string;
+  codeSnippet: string;
+  functionContext: string;
+  explanation: string;
+  lineStart: number;
+  lineEnd: number;
+  timestamp: number;
+  auditId: string;
+  isVerified: boolean;
+}
+
+const runtimeDeno = (globalThis as typeof globalThis & { Deno?: DenoRuntime }).Deno;
+const env = runtimeDeno?.env;
+
+const AI_EMBEDDING_API_URL = env?.get('AI_EMBEDDING_API_URL') || 'https://ai.sumopod.com/v1/embeddings';
+const AI_EMBEDDING_MODEL = env?.get('AI_EMBEDDING_MODEL') || 'text-embedding-3-small';
+const QDRANT_URL = (env?.get('QDRANT_URL') || '').replace(/\/+$/, '');
+const QDRANT_API_KEY = env?.get('QDRANT_API_KEY') || '';
+const QDRANT_COLLECTION = env?.get('QDRANT_COLLECTION') || 'zerovuln_audit_findings';
+
+if (!runtimeDeno) {
+  throw new Error('Deno runtime is not available');
+}
+
+runtimeDeno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPreflight();
 
   const auth = await resolveUser(req);
@@ -152,6 +190,26 @@ async function handleApproveAuditorFinding(auth: { user_id: number; is_admin: bo
     console.error('Failed to upload approved finding dataset to 0G Storage:', e);
   }
 
+  try {
+    await storeApprovedFindingToRag({
+      finding: {
+        uuid: finding.uuid,
+        title: finding.title,
+        severity: finding.severity,
+        description: finding.description,
+        line_start: finding.line_start,
+        line_end: finding.line_end,
+      },
+      contract: {
+        uuid: contract.uuid,
+        name: contract.name,
+        source_code: contract.source_code,
+      },
+    });
+  } catch (e) {
+    console.error('Failed to persist approved finding to RAG:', e);
+  }
+
   return json(updated);
 }
 
@@ -171,6 +229,251 @@ function sliceSourceByLines(sourceCode: unknown, lineStart: number, lineEnd: num
   const start = Number.isInteger(lineStart) && (lineStart as number) >= 1 ? (lineStart as number) : 1;
   const end = Number.isInteger(lineEnd) && (lineEnd as number) >= start ? (lineEnd as number) : lines.length;
   return lines.slice(start - 1, end).join('\n');
+}
+
+function sourceCodeToLines(sourceCode: unknown): string[] {
+  if (!Array.isArray(sourceCode) || sourceCode.length === 0) return [];
+  const lines: string[] = [];
+  for (const entry of sourceCode) {
+    if (entry && typeof entry === 'object' && 'code' in entry) {
+      const code = (entry as { code?: unknown }).code;
+      if (typeof code === 'string') {
+        lines.push(...code.split('\n'));
+      }
+    }
+  }
+  return lines;
+}
+
+function extractContextWindow(sourceCode: unknown, lineStart: number | null, lineEnd: number | null, padding = 15): string {
+  const lines = sourceCodeToLines(sourceCode);
+  if (lines.length === 0) return '';
+
+  const startLine = Number.isInteger(lineStart) && (lineStart ?? 0) >= 1 ? (lineStart as number) : 1;
+  const endLine = Number.isInteger(lineEnd) && (lineEnd ?? 0) >= startLine ? (lineEnd as number) : startLine;
+  const start = Math.max(0, startLine - 1 - padding);
+  const end = Math.min(lines.length, endLine + padding);
+  return lines.slice(start, end).join('\n');
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function getEmbeddingApiKey(): string {
+  return env?.get('AI_EMBEDDING_API_KEY') || env?.get('AI_API_KEY') || '';
+}
+
+function isRagConfigured(): boolean {
+  return Boolean(QDRANT_URL && getEmbeddingApiKey());
+}
+
+async function embedText(text: string): Promise<number[]> {
+  const apiKey = getEmbeddingApiKey();
+  if (!apiKey) {
+    console.warn('Approved finding RAG skipped: embedding API key is not configured');
+    return [];
+  }
+
+  const response = await fetch(AI_EMBEDDING_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: AI_EMBEDDING_MODEL,
+      input: text,
+    }),
+  });
+
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`Embedding API ${response.status}: ${errBody}`);
+  }
+
+  const data = await response.json() as Record<string, unknown>;
+  const items = Array.isArray(data.data) ? data.data : [];
+  const first = items[0] as Record<string, unknown> | undefined;
+  const embedding = first?.embedding;
+  if (!Array.isArray(embedding)) {
+    throw new Error('Embedding API returned an invalid vector');
+  }
+
+  return embedding
+    .map((value) => typeof value === 'number' ? value : Number(value))
+    .filter((value) => Number.isFinite(value));
+}
+
+function qdrantHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (QDRANT_API_KEY) headers['api-key'] = QDRANT_API_KEY;
+  return headers;
+}
+
+async function qdrantRequest(path: string, init: RequestInit, allow404 = false): Promise<Response | null> {
+  if (!QDRANT_URL) return null;
+
+  const extraHeaders = init.headers ? Object.fromEntries(new Headers(init.headers).entries()) : {};
+  const response = await fetch(`${QDRANT_URL}${path}`, {
+    ...init,
+    headers: {
+      ...qdrantHeaders(),
+      ...extraHeaders,
+    },
+  });
+
+  if (allow404 && response.status === 404) return null;
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`Qdrant ${response.status}: ${errBody}`);
+  }
+  return response;
+}
+
+async function ensureQdrantCollection(vectorSize: number): Promise<void> {
+  if (!QDRANT_URL || vectorSize <= 0) return;
+
+  const existing = await qdrantRequest(`/collections/${QDRANT_COLLECTION}`, { method: 'GET' }, true);
+  if (existing) return;
+
+  await qdrantRequest(`/collections/${QDRANT_COLLECTION}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      vectors: {
+        size: vectorSize,
+        distance: 'Cosine',
+      },
+    }),
+  });
+}
+
+async function upsertQdrantPoint(id: string, vector: number[], payload: Record<string, unknown>): Promise<void> {
+  if (!QDRANT_URL || vector.length === 0) return;
+
+  await ensureQdrantCollection(vector.length);
+  await qdrantRequest(`/collections/${QDRANT_COLLECTION}/points?wait=true`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      points: [
+        {
+          id,
+          vector,
+          payload,
+        },
+      ],
+    }),
+  });
+}
+
+function normalizeSeverityForRag(value: unknown): Severity {
+  const normalized = typeof value === 'string' ? value.toUpperCase() : 'MEDIUM';
+  if (normalized === 'CRITICAL' || normalized === 'HIGH' || normalized === 'MEDIUM' || normalized === 'LOW' || normalized === 'INFO') {
+    return normalized;
+  }
+  return 'MEDIUM';
+}
+
+function extractSwcId(...parts: unknown[]): string | undefined {
+  const text = parts
+    .flatMap((part) => Array.isArray(part) ? part : [part])
+    .filter((part): part is string => typeof part === 'string')
+    .join(' ');
+
+  const match = text.match(/\bSWC-\d+\b/i);
+  return match?.[0]?.toUpperCase();
+}
+
+function buildEmbeddingText(finding: RagFindingRecord): string {
+  return [
+    `Vulnerability: ${finding.vulnerabilityType}`,
+    `SWC: ${finding.swcId ?? 'N/A'}`,
+    `Severity: ${finding.severity}`,
+    '',
+    'Vulnerable Code:',
+    finding.codeSnippet,
+    '',
+    'Function Context:',
+    finding.functionContext,
+    '',
+    'Explanation:',
+    finding.explanation,
+  ].join('\n').trim();
+}
+
+async function storeApprovedFindingToRag(params: {
+  finding: {
+    uuid: string;
+    title: string;
+    severity: string;
+    description: string;
+    line_start: number | null;
+    line_end: number | null;
+  };
+  contract: {
+    uuid: string;
+    name: string;
+    source_code: unknown;
+  };
+}): Promise<void> {
+  if (!isRagConfigured()) {
+    console.warn('Approved finding RAG skipped: Qdrant or embedding credentials are missing');
+    return;
+  }
+
+  const fullSource = sourceCodeToLines(params.contract.source_code).join('\n');
+  if (!fullSource.trim()) {
+    console.warn('Approved finding RAG skipped: contract source is empty');
+    return;
+  }
+
+  const lineStart = Number.isInteger(params.finding.line_start) && (params.finding.line_start ?? 0) >= 1
+    ? (params.finding.line_start as number)
+    : 1;
+  const lineEnd = Number.isInteger(params.finding.line_end) && (params.finding.line_end ?? 0) >= lineStart
+    ? (params.finding.line_end as number)
+    : lineStart;
+
+  const record: RagFindingRecord = {
+    id: params.finding.uuid,
+    contractId: params.contract.uuid,
+    contractHash: await sha256Hex(fullSource),
+    contractName: params.contract.name,
+    vulnerabilityType: params.finding.title,
+    severity: normalizeSeverityForRag(params.finding.severity),
+    swcId: extractSwcId(params.finding.title, params.finding.description),
+    codeSnippet: sliceSourceByLines(params.contract.source_code, lineStart, lineEnd),
+    functionContext: extractContextWindow(params.contract.source_code, lineStart, lineEnd),
+    explanation: params.finding.description || '',
+    lineStart,
+    lineEnd,
+    timestamp: Date.now(),
+    auditId: params.finding.uuid,
+    isVerified: true,
+  };
+
+  const embeddingText = buildEmbeddingText(record);
+  const embedding = await embedText(embeddingText);
+  if (embedding.length === 0) return;
+
+  const storageResult = await uploadToOgStorage(
+    'ai-findings-rag',
+    `approved-auditor-findings/${params.finding.uuid}.json`,
+    JSON.stringify({ ...record, embeddingText }),
+  );
+
+  await upsertQdrantPoint(params.finding.uuid, embedding, {
+    rootHash: storageResult.uri,
+    vulnerabilityType: record.vulnerabilityType,
+    severity: record.severity,
+    swcId: record.swcId,
+    contractHash: record.contractHash,
+    lineStart: record.lineStart,
+    lineEnd: record.lineEnd,
+    timestamp: record.timestamp,
+    isVerified: true,
+  });
 }
 
 function buildDatasetRecord(args: {

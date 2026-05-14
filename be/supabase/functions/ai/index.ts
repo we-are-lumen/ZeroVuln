@@ -1,11 +1,99 @@
 import { resolveUser, unauthorized, notFound, badRequest, serverError, json, supabase, corsPreflight } from '../_shared/supabase.ts';
-import { submitComputeJob } from '../_shared/og-storage.ts';
+import { uploadToOgStorage, fetchFromOgStorage } from '../_shared/og-storage.ts';
 
-// constant AI System Prompt
-const AI_CODEGEN_SYSTEM_PROMPT = "Target: Lead Blockchain Security Architect & Smart Contract Auditor.\nRole: Generate high-security Solidity smart contracts and provide a detailed forensic trace of an averted attack.\n\nOperational Rules:\n1. Standards: Solidity ^0.8.20, OpenZeppelin (AccessControl, ReentrancyGuard, SafeERC20).\n2. Patterns: Checks-Effects-Interactions, Pull-over-Push.\n3. Output Requirement: Valid JSON only. Do NOT use markdown code blocks, backticks, or any conversational text.\n\nCRITICAL WORKFLOW:\nStep 1: Generate a production-ready Solidity contract.\nStep 2: Identify specific mitigations within the code (line-by-line).\nStep 3: Simulate a 'Flow Tracing' of a failed hack attempt against this specific implementation.\n\nJSON Structure:\n{\n  \"code\": \"string (Single line string. Use \\n for newlines. Escape all internal quotes)\",\n  \"vulnerability_mitigations\": [\n    {\n      \"name\": \"string\",\n      \"reason\": \"string\",\n      \"start_line\": number,\n      \"end_line\": number\n    }\n  ]\n}\n\nConstraint: The response must be a single, raw JSON object. If you include any text outside the JSON braces, the system will fail.";
-const AI_CODEAUDIT_SYSTEM_PROMPT = "**Role:** You are a Senior Smart Contract Auditor. Analyze the provided raw Solidity string for vulnerabilities and provide a production-ready fix.\n\n**Input:** A raw UTF-8 string of Solidity code.\n\n**Protocol:**\n\n1. **Index:** Internally treat the string as a list of lines starting at line 1.\n2. **Audit:** Identify Critical (Reentrancy, Logic), High (Access Control), Medium (Arithmetic, DoS), and Low (Gas, NatSpec) issues.\n3. **Remediate:** Create a `code_fixed` version using OpenZeppelin standards and the Checks-Effects-Interactions (CEI) pattern.\n4. **Map:** Track exactly which lines in the original code the vulnerabilities and fixes correspond to.\n\n**Output Rules (STRICT):**\n\n* **JSON ONLY.** Your entire response must be a single, valid JSON object.\n* **NO MARKDOWN WRAPPERS.** Do not use `json or ` blocks.\n* **Start your response directly with `{` and end with `}`.**\n* **NO CONVERSATIONAL TEXT.**\n* **LINE ACCURACY.** `start_line` and `end_line` must match the 1-based index of the input string exactly.\n* **VERBATIM FIX.** `suggested_code` must be an exact substring/extract from your `code_fixed`.\n\n**JSON Schema:**\n\n```json\n{\n  \"code_fixed\": \"string (The raw string corrected and secured smart contract code)\",\n  \"vulnerabilities\": [\n    {\n      \"name\": \"string\",\n      \"reasoning_trace\": [\"string (Step-by-step PoC referencing line numbers)\"],\n      \"start_line\": number,\n      \"end_line\": number,\n      \"severity\": \"<critical or high or medium or low or info>\",\n      \"confidence\": number,\n      \"suggested_code\": \"string\",\n      \"attack_trace\": {\n        \"traceId\": \"string (hex)\",\n        \"nodes\": [\n          {\n            \"id\": \"string\",\n            \"label\": \"string\",\n            \"type\": \"string\",\n            \"address\": \"string\"\n          }\n        ],\n        \"edges\": [\n          {\n            \"from\": \"string\",\n            \"to\": \"string\",\n            \"action\": \"string\",\n            \"value\": \"string (optional)\",\n            \"status\": \"string\"\n          }\n        ],\n        \"metadata\": {\n          \"blockNumber\": number,\n          \"confidence\": number,\n          \"vulnerability\": \"string\"\n        }\n      }\n    }\n  ]\n}\n\n```";
+type DenoRuntime = {
+  env: { get(name: string): string | undefined };
+  serve(handler: (req: Request) => Response | Promise<Response>): void;
+};
 
-Deno.serve(async (req: Request) => {
+const runtimeDeno = (globalThis as typeof globalThis & { Deno?: DenoRuntime }).Deno;
+const env = runtimeDeno?.env;
+
+const AI_CHAT_API_URL = env?.get('AI_CHAT_API_URL') || 'https://ai.sumopod.com/v1/chat/completions';
+const AI_CHAT_MODEL = env?.get('AI_CHAT_MODEL') || 'gemini/gemini-3.1-flash-lite-preview';
+const AI_EMBEDDING_API_URL = env?.get('AI_EMBEDDING_API_URL') || 'https://ai.sumopod.com/v1/embeddings';
+const AI_EMBEDDING_MODEL = env?.get('AI_EMBEDDING_MODEL') || 'text-embedding-3-small';
+const QDRANT_URL = (env?.get('QDRANT_URL') || '').replace(/\/+$/, '');
+const QDRANT_API_KEY = env?.get('QDRANT_API_KEY') || '';
+const QDRANT_COLLECTION = env?.get('QDRANT_COLLECTION') || 'zerovuln_audit_findings';
+const RAG_TOP_K = Math.max(1, Number.parseInt(env?.get('RAG_TOP_K') || '5', 10) || 5);
+
+const AI_CODEGEN_SYSTEM_PROMPT = "Target: Lead Blockchain Security Architect and Smart Contract Auditor.\nRole: Generate high-security Solidity smart contracts and provide a detailed forensic trace of an averted attack.\n\nOperational Rules:\n1. Standards: Solidity ^0.8.20, OpenZeppelin (AccessControl, ReentrancyGuard, SafeERC20).\n2. Patterns: Checks-Effects-Interactions, Pull-over-Push.\n3. Output Requirement: Valid JSON only. Do NOT use markdown code blocks, backticks, or conversational text.\n\nCRITICAL WORKFLOW:\nStep 1: Generate a production-ready Solidity contract.\nStep 2: Identify specific mitigations within the code line-by-line.\nStep 3: Simulate a flow tracing of a failed hack attempt against this implementation.\n\nJSON Structure:\n{\n  \"code\": \"string (Use \\n for new lines and escape internal quotes)\",\n  \"vulnerability_mitigations\": [\n    {\n      \"name\": \"string\",\n      \"reason\": \"string\",\n      \"start_line\": number,\n      \"end_line\": number\n    }\n  ]\n}\n\nConstraint: The response must be a single raw JSON object.";
+const AI_CODEAUDIT_SYSTEM_PROMPT = "Role: You are a senior smart contract auditor. Analyze the provided Solidity source for vulnerabilities and provide a production-ready fix.\n\nProtocol:\n1. Treat the source as a 1-based list of lines.\n2. Audit for critical, high, medium, low, and informational issues.\n3. Produce a corrected code_fixed version using OpenZeppelin standards and the CEI pattern when relevant.\n4. Map exact line numbers from the original input.\n\nOutput rules:\n- JSON only.\n- No markdown wrappers.\n- Start with { and end with }.\n- suggested_code must be a verbatim extract from code_fixed.\n\nJSON Schema:\n{\n  \"code_fixed\": \"string\",\n  \"vulnerabilities\": [\n    {\n      \"name\": \"string\",\n      \"reasoning_trace\": [\"string\"],\n      \"start_line\": number,\n      \"end_line\": number,\n      \"severity\": \"critical|high|medium|low|info\",\n      \"confidence\": number,\n      \"suggested_code\": \"string\",\n      \"attack_trace\": {\n        \"traceId\": \"string\",\n        \"nodes\": [{ \"id\": \"string\", \"label\": \"string\", \"type\": \"string\", \"address\": \"string\" }],\n        \"edges\": [{ \"from\": \"string\", \"to\": \"string\", \"label\": \"string\" }]\n      }\n    }\n  ]\n}";
+
+type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
+
+interface AIChatPayload {
+  prompt: string;
+  system_prompt: string;
+}
+
+interface AuditVulnerability {
+  name?: string;
+  severity?: string;
+  start_line?: number;
+  end_line?: number;
+  confidence?: number;
+  reasoning_trace?: string[];
+  suggested_code?: unknown;
+  attack_trace?: unknown;
+}
+
+interface StoredFindingRow {
+  uuid: string;
+  severity: string;
+  title: string;
+  description: string | null;
+  line_start: number | null;
+  line_end: number | null;
+  confidence?: number | null;
+  status?: string | null;
+  attack_trace?: unknown;
+  remediation?: unknown;
+}
+
+interface RagFindingRecord {
+  id: string;
+  contractId?: string;
+  contractHash: string;
+  contractName?: string;
+  vulnerabilityType: string;
+  severity: Severity;
+  swcId?: string;
+  codeSnippet: string;
+  functionContext: string;
+  explanation: string;
+  lineStart: number;
+  lineEnd: number;
+  timestamp: number;
+  auditId: string;
+  isVerified: boolean;
+  remediation?: string;
+  attackTrace?: unknown;
+  embeddingText?: string;
+}
+
+interface QdrantPointPayload {
+  rootHash?: string;
+  vulnerabilityType?: string;
+  severity?: string;
+  swcId?: string;
+  contractHash?: string;
+  lineStart?: number;
+  lineEnd?: number;
+  timestamp?: number;
+}
+
+interface QdrantSearchPoint {
+  id: string;
+  payload?: QdrantPointPayload;
+}
+
+if (!runtimeDeno) {
+  throw new Error('Deno runtime is not available');
+}
+
+runtimeDeno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return corsPreflight();
 
   const auth = await resolveUser(req);
@@ -31,35 +119,160 @@ Deno.serve(async (req: Request) => {
   return notFound('Endpoint not found');
 });
 
-interface AIChatPayload {
-  prompt: string;
-  system_prompt: string;
-}
-
 async function aiFetch(payload: AIChatPayload): Promise<Response> {
-  const apiUrl = 'https://ai.sumopod.com/v1/chat/completions';
-  const apiKey = Deno.env.get('AI_API_KEY');
-  const model = 'gemini/gemini-3.1-flash-lite-preview';
-  const maxTokens =  1024;
+  const apiKey = env?.get('AI_API_KEY');
+  const maxTokens = 1024;
   const temperature = 0.7;
 
   if (!apiKey) throw new Error('AI_API_KEY not configured');
 
-  return await fetch(apiUrl, {
+  return fetch(AI_CHAT_API_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`
+      Authorization: `Bearer ${apiKey}`,
     },
     body: JSON.stringify({
-      model,
+      model: AI_CHAT_MODEL,
       messages: [
         { role: 'system', content: payload.system_prompt },
-        { role: 'user', content: payload.prompt }
+        { role: 'user', content: payload.prompt },
       ],
       max_tokens: maxTokens,
-      temperature
-    })
+      temperature,
+    }),
+  });
+}
+
+function getEmbeddingApiKey(): string {
+  return env?.get('AI_EMBEDDING_API_KEY') || env?.get('AI_API_KEY') || '';
+}
+
+function isRagConfigured(): boolean {
+  return Boolean(QDRANT_URL && getEmbeddingApiKey());
+}
+
+async function embedText(text: string): Promise<number[]> {
+  const apiKey = getEmbeddingApiKey();
+  if (!apiKey) {
+    console.warn('RAG embedding skipped: embedding API key is not configured');
+    return [];
+  }
+
+  const response = await fetch(AI_EMBEDDING_API_URL, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model: AI_EMBEDDING_MODEL,
+      input: text,
+    }),
+  });
+
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`Embedding API ${response.status}: ${errBody}`);
+  }
+
+  const data = await response.json() as Record<string, unknown>;
+  const items = Array.isArray(data.data) ? data.data : [];
+  const first = items[0] as Record<string, unknown> | undefined;
+  const embedding = first?.embedding;
+  if (!Array.isArray(embedding)) {
+    throw new Error('Embedding API returned an invalid vector');
+  }
+
+  return embedding
+    .map((value) => typeof value === 'number' ? value : Number(value))
+    .filter((value) => Number.isFinite(value));
+}
+
+function qdrantHeaders(): Record<string, string> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (QDRANT_API_KEY) {
+    headers['api-key'] = QDRANT_API_KEY;
+  }
+  return headers;
+}
+
+async function qdrantRequest(path: string, init: RequestInit, allow404 = false): Promise<Response | null> {
+  if (!QDRANT_URL) return null;
+
+  const extraHeaders = init.headers ? Object.fromEntries(new Headers(init.headers).entries()) : {};
+  const response = await fetch(`${QDRANT_URL}${path}`, {
+    ...init,
+    headers: {
+      ...qdrantHeaders(),
+      ...extraHeaders,
+    },
+  });
+
+  if (allow404 && response.status === 404) return null;
+  if (!response.ok) {
+    const errBody = await response.text();
+    throw new Error(`Qdrant ${response.status}: ${errBody}`);
+  }
+  return response;
+}
+
+async function ensureQdrantCollection(vectorSize: number): Promise<void> {
+  if (!QDRANT_URL || vectorSize <= 0) return;
+
+  const existing = await qdrantRequest(`/collections/${QDRANT_COLLECTION}`, { method: 'GET' }, true);
+  if (existing) return;
+
+  await qdrantRequest(`/collections/${QDRANT_COLLECTION}`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      vectors: {
+        size: vectorSize,
+        distance: 'Cosine',
+      },
+    }),
+  });
+}
+
+async function searchQdrant(vector: number[], limit: number): Promise<QdrantSearchPoint[]> {
+  if (!QDRANT_URL || vector.length === 0) return [];
+
+  const response = await qdrantRequest(`/collections/${QDRANT_COLLECTION}/points/query`, {
+    method: 'POST',
+    body: JSON.stringify({
+      query: vector,
+      limit,
+      with_payload: true,
+      with_vector: false,
+    }),
+  }, true);
+
+  if (!response) return [];
+
+  const data = await response.json() as Record<string, unknown>;
+  const result = data.result;
+  if (Array.isArray(result)) return result as QdrantSearchPoint[];
+  if (result && typeof result === 'object' && Array.isArray((result as { points?: unknown[] }).points)) {
+    return (result as { points: QdrantSearchPoint[] }).points;
+  }
+  return [];
+}
+
+async function upsertQdrantPoint(id: string, vector: number[], payload: QdrantPointPayload): Promise<void> {
+  if (!QDRANT_URL || vector.length === 0) return;
+
+  await ensureQdrantCollection(vector.length);
+  await qdrantRequest(`/collections/${QDRANT_COLLECTION}/points?wait=true`, {
+    method: 'PUT',
+    body: JSON.stringify({
+      points: [
+        {
+          id,
+          vector,
+          payload,
+        },
+      ],
+    }),
   });
 }
 
@@ -88,10 +301,9 @@ function extractAIContent(aiData: unknown): unknown {
   if (!aiData || typeof aiData !== 'object') return aiData;
   const data = aiData as Record<string, unknown>;
 
-  // OpenAI-compatible: choices[0].message.content
   if (Array.isArray(data.choices) && data.choices.length > 0) {
     const choice = data.choices[0] as Record<string, unknown>;
-    const message = choice?.message as Record<string, unknown> | undefined;
+    const message = choice.message as Record<string, unknown> | undefined;
     const content = message?.content;
     if (typeof content === 'string') {
       try {
@@ -102,7 +314,6 @@ function extractAIContent(aiData: unknown): unknown {
     }
   }
 
-  // Legacy shape: { response: string | object }
   if ('response' in data) {
     const inner = data.response;
     if (typeof inner === 'string') {
@@ -118,20 +329,30 @@ function extractAIContent(aiData: unknown): unknown {
   return aiData;
 }
 
-function flattenSource(source: unknown): string {
-  if (!Array.isArray(source)) return '';
-  const parts: string[] = [];
-  for (const entry of source) {
-    if (entry && typeof entry === 'object' && 'code' in entry) {
-      const code = (entry as { code?: unknown }).code;
-      if (typeof code === 'string') parts.push(code);
-    }
-  }
-  return parts.join('\n\n');
-}
-
 function codeStringToSourceBlocks(code: string) {
   return code.split(/\r?\n/).map((line, index) => ({ code: line, line: index + 1 }));
+}
+
+function extractLines(source: string, lineStart?: number | null, lineEnd?: number | null): string {
+  if (!lineStart || !lineEnd || lineStart <= 0 || lineEnd < lineStart) return '';
+  const lines = source.split(/\r?\n/);
+  return lines.slice(lineStart - 1, lineEnd).join('\n').trim();
+}
+
+function extractContextWindow(source: string, lineStart?: number | null, lineEnd?: number | null, padding = 15): string {
+  const lines = source.split(/\r?\n/);
+  if (!lineStart || !lineEnd || lineStart <= 0 || lineEnd < lineStart) {
+    return lines.slice(0, Math.min(lines.length, 40)).join('\n').trim();
+  }
+
+  const start = Math.max(0, lineStart - 1 - padding);
+  const end = Math.min(lines.length, lineEnd + padding);
+  return lines.slice(start, end).join('\n').trim();
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
 function parseAIResponse(aiData: unknown) {
@@ -147,6 +368,221 @@ function parseAIResponse(aiData: unknown) {
   return { code: typeof payload === 'string' ? payload : '', mitigations: [], raw: payload };
 }
 
+function parseAuditResponse(aiData: unknown): { code_fixed: string; vulnerabilities: AuditVulnerability[] } {
+  const payload = extractAIContent(aiData);
+  if (payload && typeof payload === 'object') {
+    const p = payload as { code_fixed?: unknown; vulnerabilities?: unknown };
+    const code_fixed = typeof p.code_fixed === 'string' ? p.code_fixed : '';
+    const vulnerabilities = Array.isArray(p.vulnerabilities) ? p.vulnerabilities as AuditVulnerability[] : [];
+    return { code_fixed, vulnerabilities };
+  }
+  return { code_fixed: '', vulnerabilities: [] };
+}
+
+function normalizeSeverity(value: unknown): string {
+  const valid = ['critical', 'high', 'medium', 'low', 'info'];
+  if (typeof value === 'string' && valid.includes(value.toLowerCase())) return value.toLowerCase();
+  return 'medium';
+}
+
+function toRagSeverity(value: unknown): Severity {
+  const normalized = normalizeSeverity(value).toUpperCase();
+  if (normalized === 'CRITICAL' || normalized === 'HIGH' || normalized === 'MEDIUM' || normalized === 'LOW' || normalized === 'INFO') {
+    return normalized;
+  }
+  return 'MEDIUM';
+}
+
+function extractSwcId(...parts: unknown[]): string | undefined {
+  const text = parts
+    .flatMap((part) => Array.isArray(part) ? part : [part])
+    .filter((part): part is string => typeof part === 'string')
+    .join(' ');
+
+  const match = text.match(/\bSWC-\d+\b/i);
+  return match?.[0]?.toUpperCase();
+}
+
+function buildEmbeddingText(finding: RagFindingRecord): string {
+  return [
+    `Vulnerability: ${finding.vulnerabilityType}`,
+    `SWC: ${finding.swcId ?? 'N/A'}`,
+    `Severity: ${finding.severity}`,
+    '',
+    'Vulnerable Code:',
+    finding.codeSnippet,
+    '',
+    'Function Context:',
+    finding.functionContext,
+    '',
+    'Explanation:',
+    finding.explanation,
+  ].join('\n').trim();
+}
+
+function buildRagContext(findings: RagFindingRecord[]): string {
+  if (findings.length === 0) return '';
+
+  return findings.map((finding, index) => {
+    const swc = finding.swcId ? ` (${finding.swcId})` : '';
+    return [
+      `[Pattern ${index + 1}] [${finding.severity}] ${finding.vulnerabilityType}${swc}`,
+      `Code snippet: ${finding.codeSnippet || 'N/A'}`,
+      `Why vulnerable: ${finding.explanation || 'N/A'}`,
+      `Context: ${finding.functionContext || 'N/A'}`,
+      finding.remediation ? `Suggested remediation: ${finding.remediation}` : '',
+    ].filter(Boolean).join('\n');
+  }).join('\n\n---\n\n');
+}
+
+function buildAuditPrompt(contractSource: string, retrievedFindings: RagFindingRecord[]): string {
+  const ragContext = buildRagContext(retrievedFindings);
+  if (!ragContext) return contractSource;
+
+  return [
+    'Known vulnerability patterns from previous audits:',
+    ragContext,
+    '',
+    'Analyze the Solidity contract below.',
+    'Focus especially on patterns similar to the known findings above.',
+    'Return exact line numbers relative to the full contract.',
+    '',
+    contractSource,
+  ].join('\n');
+}
+
+function buildCodegenPrompt(userPrompt: string, retrievedFindings: RagFindingRecord[]): string {
+  const ragContext = buildRagContext(retrievedFindings);
+  if (!ragContext) return userPrompt;
+
+  return [
+    'Use the previous vulnerability patterns below to avoid insecure implementations:',
+    ragContext,
+    '',
+    'User request:',
+    userPrompt,
+    '',
+    'Generate secure Solidity code that explicitly avoids the vulnerable patterns above.',
+  ].join('\n');
+}
+
+function parseStoredRagFinding(content: string): RagFindingRecord | null {
+  try {
+    const parsed = JSON.parse(content);
+    if (!parsed || typeof parsed !== 'object') return null;
+    const record = parsed as Partial<RagFindingRecord>;
+    if (typeof record.id !== 'string' || typeof record.vulnerabilityType !== 'string') return null;
+    if (typeof record.explanation !== 'string' || typeof record.codeSnippet !== 'string' || typeof record.functionContext !== 'string') return null;
+    if (typeof record.lineStart !== 'number' || typeof record.lineEnd !== 'number') return null;
+    if (typeof record.auditId !== 'string' || typeof record.contractHash !== 'string') return null;
+    return record as RagFindingRecord;
+  } catch {
+    return null;
+  }
+}
+
+async function retrieveRelevantFindings(queryText: string, topK = RAG_TOP_K): Promise<RagFindingRecord[]> {
+  if (!isRagConfigured()) return [];
+
+  const queryEmbedding = await embedText(queryText);
+  if (queryEmbedding.length === 0) return [];
+
+  const results = await searchQdrant(queryEmbedding, topK);
+  if (results.length === 0) return [];
+
+  const findings = await Promise.all(results.map(async (result) => {
+    const rootHash = result.payload?.rootHash;
+    if (!rootHash) return null;
+
+    try {
+      const { content } = await fetchFromOgStorage(rootHash);
+      return parseStoredRagFinding(content);
+    } catch (error) {
+      console.error('Failed to fetch RAG context from 0G:', error);
+      return null;
+    }
+  }));
+
+  return findings.filter((finding): finding is RagFindingRecord => Boolean(finding));
+}
+
+async function storeFindingToRag(finding: RagFindingRecord): Promise<void> {
+  if (!isRagConfigured()) {
+    console.warn('RAG persistence skipped: Qdrant or embedding credentials are missing');
+    return;
+  }
+
+  const embeddingText = buildEmbeddingText(finding);
+  const embedding = await embedText(embeddingText);
+  if (embedding.length === 0) return;
+
+  const record: RagFindingRecord = {
+    ...finding,
+    embeddingText,
+  };
+
+  const storageResult = await uploadToOgStorage('ai-findings-rag', `${finding.id}.json`, JSON.stringify(record));
+  await upsertQdrantPoint(finding.id, embedding, {
+    rootHash: storageResult.uri,
+    vulnerabilityType: finding.vulnerabilityType,
+    severity: finding.severity,
+    swcId: finding.swcId,
+    contractHash: finding.contractHash,
+    lineStart: finding.lineStart,
+    lineEnd: finding.lineEnd,
+    timestamp: finding.timestamp,
+  });
+}
+
+async function persistAuditFindingsToRag(params: {
+  contractId: string;
+  auditId: string;
+  contractSource: string;
+  findings: StoredFindingRow[];
+  vulnerabilities: AuditVulnerability[];
+}): Promise<void> {
+  if (!isRagConfigured() || params.findings.length === 0 || params.vulnerabilities.length === 0) return;
+
+  const contractHash = await sha256Hex(params.contractSource);
+
+  await Promise.all(params.findings.map(async (finding, index) => {
+    const vulnerability = params.vulnerabilities[index];
+    if (!finding?.uuid || !vulnerability) return;
+
+    const lineStart = typeof vulnerability.start_line === 'number'
+      ? vulnerability.start_line
+      : (finding.line_start ?? 1);
+    const lineEnd = typeof vulnerability.end_line === 'number'
+      ? vulnerability.end_line
+      : (finding.line_end ?? lineStart);
+
+    const ragFinding: RagFindingRecord = {
+      id: finding.uuid,
+      contractId: params.contractId,
+      contractHash,
+      vulnerabilityType: finding.title || vulnerability.name || 'Security Finding',
+      severity: toRagSeverity(finding.severity || vulnerability.severity),
+      swcId: extractSwcId(vulnerability.name, vulnerability.reasoning_trace),
+      codeSnippet: extractLines(params.contractSource, lineStart, lineEnd),
+      functionContext: extractContextWindow(params.contractSource, lineStart, lineEnd),
+      explanation: finding.description || (Array.isArray(vulnerability.reasoning_trace) ? vulnerability.reasoning_trace.join('\n') : 'No explanation provided'),
+      lineStart,
+      lineEnd,
+      timestamp: Date.now(),
+      auditId: params.auditId,
+      isVerified: false,
+      remediation: typeof vulnerability.suggested_code === 'string' ? vulnerability.suggested_code : undefined,
+      attackTrace: vulnerability.attack_trace ?? null,
+    };
+
+    try {
+      await storeFindingToRag(ragFinding);
+    } catch (error) {
+      console.error(`Failed to persist finding ${finding.uuid} to RAG:`, error);
+    }
+  }));
+}
+
 async function handleCodegen(_req: Request, auth: { user_id: number }, body: Record<string, unknown>) {
   const { prompt, contract_id } = body;
 
@@ -154,7 +590,6 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
     return badRequest('prompt is required');
   }
 
-  // Resolve contract: accept uuid from caller, otherwise create a fresh draft.
   let contractRowId: number;
   let contractUuid: string;
   if (contract_id && typeof contract_id === 'string') {
@@ -190,7 +625,6 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
     contractUuid = newContract.uuid;
   }
 
-  // Create audit record
   const { data: audit, error: auditError } = await supabase
     .from('audits')
     .insert({
@@ -204,18 +638,20 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
   if (auditError || !audit) return serverError('Failed to create audit record');
 
   try {
-    // Call AI inference endpoint
-    // const aiEndpoint = Deno.env.get('AI_INFERENCE_URL') || 'http://localhost:8000';
-    
+    let retrievedFindings: RagFindingRecord[] = [];
+    try {
+      retrievedFindings = await retrieveRelevantFindings(prompt, RAG_TOP_K);
+    } catch (error) {
+      console.error('Codegen RAG retrieval failed, continuing without context:', error);
+    }
+
     const aiResponse = await aiFetch({
-      prompt: prompt,
+      prompt: buildCodegenPrompt(prompt, retrievedFindings),
       system_prompt: AI_CODEGEN_SYSTEM_PROMPT,
     });
 
-
-
     if (!aiResponse.ok) {
-      const errBody = await aiResponse.text();                
+      const errBody = await aiResponse.text();
       throw new Error(`AI service ${aiResponse.status}: ${errBody}`);
     }
 
@@ -224,7 +660,6 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
     const generatedCode = parsed.code || '';
     const mitigations = parsed.mitigations;
 
-    // Insert ai_findings for each vulnerability mitigation
     if (Array.isArray(mitigations) && mitigations.length > 0) {
       const findings = mitigations.map((mitigation: Record<string, unknown>) => ({
         audit_id: audit.id,
@@ -257,7 +692,6 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
       }
     }
 
-    // Update contract with generated code as source_code line blocks
     if (generatedCode) {
       const sourceBlocks = codeStringToSourceBlocks(generatedCode);
       const { error: updateError } = await supabase
@@ -285,6 +719,10 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
       audit_id: audit.uuid,
       generated_code: generatedCode,
       mitigations,
+      rag: {
+        enabled: isRagConfigured(),
+        retrieved_count: retrievedFindings.length,
+      },
     }, 200);
   } catch (e) {
     console.error('Codegen job failed:', e);
@@ -303,7 +741,6 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
     return badRequest('code (raw smart contract string) is required');
   }
 
-  // Resolve / create owning contract (cannot be null on auditor_findings; we use ai_findings here).
   let contractRowId: number;
   let contractUuid: string;
   if (contract_id && typeof contract_id === 'string') {
@@ -318,7 +755,6 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
     contractRowId = existing.id;
     contractUuid = existing.uuid;
 
-    // Re-audit: wipe previous audit findings + audit rows for this contract.
     const { data: priorAudits, error: priorAuditsError } = await supabase
       .from('audits')
       .select('id')
@@ -329,7 +765,7 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
       return serverError('Failed to reset previous audit');
     }
     if (priorAudits && priorAudits.length > 0) {
-      const priorAuditIds = priorAudits.map((a) => a.id);
+      const priorAuditIds = priorAudits.map((a: { id: number }) => a.id);
       const { error: delFindingsError } = await supabase
         .from('ai_findings')
         .delete()
@@ -348,7 +784,6 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
       }
     }
 
-    // Sync contract source_code with the new code being audited.
     const { error: syncError } = await supabase
       .from('contracts')
       .update({ source_code: codeStringToSourceBlocks(code) })
@@ -389,15 +824,21 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
   if (auditError || !audit) return serverError('Failed to create audit record');
 
   try {
-    // const aiEndpoint = Deno.env.get('AI_INFERENCE_URL') || 'http://localhost:8000';
+    let retrievedFindings: RagFindingRecord[] = [];
+    try {
+      retrievedFindings = await retrieveRelevantFindings(code, RAG_TOP_K);
+    } catch (error) {
+      console.error('Audit RAG retrieval failed, continuing without context:', error);
+    }
 
     const aiResponse = await aiFetch({
-      prompt: code,
+      prompt: buildAuditPrompt(code, retrievedFindings),
       system_prompt: AI_CODEAUDIT_SYSTEM_PROMPT,
     });
 
     if (!aiResponse.ok) {
-      throw new Error(`AI service returned ${aiResponse.status}`);
+      const errBody = await aiResponse.text();
+      throw new Error(`AI service ${aiResponse.status}: ${errBody}`);
     }
 
     const aiData = await aiResponse.json();
@@ -429,9 +870,21 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
       .insert(findings)
       .select('uuid, severity, title, description, line_start, line_end, confidence, status, attack_trace, remediation');
 
-    if (findingError) {
+    if (findingError || !inserted) {
       console.error('Failed to insert ai_findings:', findingError);
       throw new Error('Failed to save audit findings');
+    }
+
+    try {
+      await persistAuditFindingsToRag({
+        contractId: contractUuid,
+        auditId: audit.uuid,
+        contractSource: code,
+        findings: inserted as StoredFindingRow[],
+        vulnerabilities: parsed.vulnerabilities,
+      });
+    } catch (error) {
+      console.error('Failed to persist audit findings into RAG:', error);
     }
 
     await supabase
@@ -448,6 +901,11 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
       audit_id: audit.uuid,
       code_fixed: parsed.code_fixed,
       findings: inserted,
+      rag: {
+        enabled: isRagConfigured(),
+        retrieved_count: retrievedFindings.length,
+        collection: QDRANT_COLLECTION,
+      },
     }, 200);
   } catch (e) {
     console.error('Audit job failed:', e);
@@ -457,32 +915,4 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
       .eq('id', audit.id);
     return serverError(`Audit failed: ${String(e)}`);
   }
-}
-
-function normalizeSeverity(value: unknown): string {
-  const valid = ['critical', 'high', 'medium', 'low', 'info'];
-  if (typeof value === 'string' && valid.includes(value.toLowerCase())) return value.toLowerCase();
-  return 'medium';
-}
-
-interface AuditVulnerability {
-  name?: string;
-  severity?: string;
-  start_line?: number;
-  end_line?: number;
-  confidence?: number;
-  reasoning_trace?: string[];
-  suggested_code?: unknown;
-  attack_trace?: unknown;
-}
-
-function parseAuditResponse(aiData: unknown): { code_fixed: string; vulnerabilities: AuditVulnerability[] } {
-  const payload = extractAIContent(aiData);
-  if (payload && typeof payload === 'object') {
-    const p = payload as { code_fixed?: unknown; vulnerabilities?: unknown };
-    const code_fixed = typeof p.code_fixed === 'string' ? p.code_fixed : '';
-    const vulnerabilities = Array.isArray(p.vulnerabilities) ? p.vulnerabilities as AuditVulnerability[] : [];
-    return { code_fixed, vulnerabilities };
-  }
-  return { code_fixed: '', vulnerabilities: [] };
 }
