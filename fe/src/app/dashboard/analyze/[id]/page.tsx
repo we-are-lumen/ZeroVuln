@@ -10,7 +10,7 @@ import {
 } from "@/shared/components/ui/breadcrumb";
 import { APP_PATH } from "@/shared/constants/app-path";
 import { useParams } from "next/navigation";
-import { useEffect, useEffectEvent, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import useQueryContractDetail from "../../code-gen/[id]/hooks/use-query-contract-detail";
 import AiFindingsSection from "./components/ai-findings-section";
 import EditorSection from "./components/editor-section";
