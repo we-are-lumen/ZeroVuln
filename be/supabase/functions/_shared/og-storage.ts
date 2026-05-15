@@ -1,10 +1,10 @@
 import { ZgFile, Indexer } from 'npm:@0gfoundation/0g-ts-sdk';
 import { ethers } from 'npm:ethers@6.13.0';
 
-const OG_CHAIN_ID = Deno.env.get('OG_CHAIN_ID') || '16602';
-const OG_RPC_URL = Deno.env.get('OG_RPC_URL') || 'https://evmrpc-testnet.0g.ai';
+const OG_CHAIN_ID = Deno.env.get('OG_CHAIN_ID') || '16661';
+const OG_RPC_URL = Deno.env.get('OG_RPC_URL') || 'https://evmrpc.0g.ai';
 const OG_COMPUTE_BROKER = Deno.env.get('OG_COMPUTE_BROKER') || '';
-const OG_STORAGE_INDEXER = Deno.env.get('OG_STORAGE_INDEXER') || 'https://indexer-storage-testnet-turbo.0g.ai';
+const OG_STORAGE_INDEXER = Deno.env.get('OG_STORAGE_INDEXER') || 'https://indexer-storage-turbo.0g.ai';
 const OG_STORAGE_NODE = Deno.env.get('OG_STORAGE_NODE') || OG_STORAGE_INDEXER;
 const OG_PRIVATE_KEY = Deno.env.get('OG_PRIVATE_KEY') || Deno.env.get('PRIVATE_KEY') || '';
 

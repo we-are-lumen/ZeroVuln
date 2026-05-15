@@ -13,6 +13,7 @@ import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
 import useQueryContractDetail from "../../hooks/use-query-contract-detail";
 import contractService from "@/api/services/contracts.service";
+import { getOgChain } from "@/shared/lib/wallet/og-chain";
 
 const normalizeContractLabel = (name?: string | null) => {
   const base = (name ?? "Contract").trim();
@@ -29,8 +30,10 @@ const formatHash = (hash?: string | null) => {
   return `${hash.slice(0, 8)}...${hash.slice(-4)}`;
 };
 
-const explorerAddressUrl = (address: string) =>
-  `https://chainscan-galileo.0g.ai/address/${address}`;
+const explorerAddressUrl = (address: string) => {
+  const explorerBase = getOgChain().blockExplorerUrls?.[0];
+  return explorerBase ? `${explorerBase}/address/${address}` : "";
+};
 
 const EditorSection = () => {
   const params = useParams();
@@ -153,7 +156,11 @@ const EditorSection = () => {
             size="sm"
             onClick={handleDeploy}
             disabled={isLoading || !fullCode || isDeploying}
-            title={!fullCode ? "Tidak ada code untuk di-deploy" : "Deploy ke OG Galileo"}
+            title={
+              !fullCode
+                ? "Tidak ada code untuk di-deploy"
+                : `Deploy ke ${getOgChain().chainName}`
+            }
           >
             <HugeiconsIcon icon={NeuralNetworkIcon} size={18} strokeWidth={2} />
             <span>{isDeploying ? "Deploying..." : "Deploy"}</span>

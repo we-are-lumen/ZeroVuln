@@ -385,7 +385,7 @@ async function main(): Promise<void> {
 
   const supabaseUrl = getEnv('SUPABASE_URL');
   const supabaseKey = getEnv('SUPABASE_SERVICE_ROLE_KEY');
-  const storageIndexer = process.env.OG_STORAGE_INDEXER || 'https://indexer-storage-testnet-turbo.0g.ai';
+  const storageIndexer = process.env.OG_STORAGE_INDEXER || 'https://indexer-storage-turbo.0g.ai';
   const storageNode = process.env.OG_STORAGE_NODE || storageIndexer;
 
   fs.mkdirSync(path.dirname(path.resolve(args.outFile)), { recursive: true });

@@ -115,11 +115,11 @@ Create `scripts/.env` (gitignored) with at minimum:
 ```env
 # --- Supabase (required) ---
 SUPABASE_URL=https://<project>.supabase.co
-SUPABASE_SERVICE_ROLE_KEY=eyJhbGciOi...
+SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
 
-# --- 0G Storage (optional; defaults to testnet turbo indexer) ---
-OG_STORAGE_INDEXER=https://indexer-storage-testnet-turbo.0g.ai
-OG_STORAGE_NODE=https://indexer-storage-testnet-turbo.0g.ai
+# --- 0G Storage (optional; defaults to turbo indexer) ---
+OG_STORAGE_INDEXER=https://indexer-storage-turbo.0g.ai
+OG_STORAGE_NODE=https://indexer-storage-turbo.0g.ai
 
 # --- 0G Compute fine-tuning (required when using --fine-tune) ---
 OG_COMPUTE_CLI=0g-compute-cli

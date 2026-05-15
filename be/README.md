@@ -8,7 +8,7 @@ Supabase Edge Functions (Deno) + Postgres, wired into the 0G stack for verifiabl
 
 [![Runtime](https://img.shields.io/badge/Runtime-Deno_2.x-black?logo=deno)](https://deno.land)
 [![Platform](https://img.shields.io/badge/Platform-Supabase-3ECF8E?logo=supabase)](https://supabase.com)
-[![Chain](https://img.shields.io/badge/Chain-0G_Testnet_16602-6c5ce7)](https://0g.ai)
+[![Chain](https://img.shields.io/badge/Chain-0G_Mainnet_16661-6c5ce7)](https://0g.ai)
 [![Language](https://img.shields.io/badge/Lang-TypeScript-3178c6?logo=typescript)](https://www.typescriptlang.org)
 
 [API Docs](./API_FE_DOCS.md) · [Migrations](./supabase/migrations) · [0G Skill Index](./CLAUDE.md)
@@ -45,7 +45,7 @@ graph TD
     subgraph "0G Network"
       Broker["0G Compute Broker"]
       Storage["0G Storage Indexer"]
-      Chain["0G Chain (16602)"]
+      Chain["0G Chain (16661)"]
     end
 
     Wallet -- "HTTP (Auth Headers)" --> BE
@@ -61,7 +61,7 @@ graph TD
 | Database     | Postgres (Supabase managed, service-role access)    |
 | AI Inference | 0G Compute Broker (HTTP) — codegen / audit / fix    |
 | Dataset      | 0G Storage via `@0gfoundation/0g-ts-sdk@1.2.8`      |
-| Signer       | `ethers` v6 on 0G testnet (`chainId: 16602`)        |
+| Signer       | `ethers` v6 on 0G mainnet (`chainId: 16661`)        |
 
 ---
 
@@ -207,9 +207,9 @@ Copy `.env.example` to `.env`. For deployed environments, use `supabase secrets 
 | `SUPABASE_URL`              |    ✓     | Supabase project URL                                                       |
 | `SUPABASE_SERVICE_ROLE_KEY` |    ✓     | Service role key — used by every edge function (bypasses RLS)              |
 | `ADMIN_WALLETS`             |    ✓     | Comma-separated wallets to promote to `is_admin=true`                      |
-| `OG_CHAIN_ID`               |    –     | Defaults to `16602` (0G testnet)                                           |
-| `OG_RPC_URL`                |    –     | Defaults to `https://evmrpc-testnet.0g.ai`                                 |
-| `OG_STORAGE_INDEXER`        |    –     | Defaults to `https://indexer-storage-testnet-turbo.0g.ai`                  |
+| `OG_CHAIN_ID`               |    –     | Defaults to `16661` (0G mainnet)                                           |
+| `OG_RPC_URL`                |    –     | Defaults to `https://evmrpc.0g.ai`                                         |
+| `OG_STORAGE_INDEXER`        |    –     | Defaults to `https://indexer-storage-turbo.0g.ai`                          |
 | `OG_STORAGE_NODE`           |    –     | Legacy `POST /upload` fallback; defaults to `OG_STORAGE_INDEXER`           |
 | `OG_PRIVATE_KEY`            |   ✓\*    | Signer for SDK uploads. Without it, uploads fall back to the legacy node   |
 | `OG_COMPUTE_BROKER`         |   ✓\*    | 0G Compute broker HTTP endpoint. Required for any AI trigger to succeed    |

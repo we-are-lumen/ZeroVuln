@@ -3,7 +3,7 @@
 import { BrowserProvider, ContractFactory, type InterfaceAbi } from "ethers";
 
 import type { Eip1193Provider } from "@/shared/types/eip1193.type";
-import { ensureOgGalileoChain, OG_GALILEO_CHAIN } from "../wallet/og-galileo";
+import { ensureOgChain, getOgChain } from "../wallet/og-chain";
 
 type DeployResult = {
   address: string;
@@ -72,7 +72,7 @@ export async function deploySolidityContractFromSource(
     throw new Error("Wallet provider tidak ditemukan. Install MetaMask dulu.");
   }
 
-  await ensureOgGalileoChain(ethereum);
+  await ensureOgChain(ethereum);
 
   // Hindari compile di browser (solc butuh Node 'fs'). Compile kita jalankan via Next API route.
   const { abi, bytecode, constructorInputs } = await compileOnServer(source);
@@ -96,7 +96,7 @@ export async function deploySolidityContractFromSource(
 
   const address = await contract.getAddress();
   const txHash = tx?.hash;
-  const explorerBase = OG_GALILEO_CHAIN.blockExplorerUrls?.[0];
+  const explorerBase = getOgChain().blockExplorerUrls?.[0];
 
   return {
     address,
