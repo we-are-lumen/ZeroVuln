@@ -2,6 +2,51 @@
 
 This document is for integrating the frontend with Supabase Edge Functions.
 
+## Table of Contents
+
+- [1) Base URL](#1-base-url)
+- [2) Auth Header (Required)](#2-auth-header-required)
+- [3) Error Shape](#3-error-shape)
+- [4) Endpoint Detail (Request Body)](#4-endpoint-detail-request-body)
+  - [4.1 Contracts (User-owned)](#41-contracts-user-owned)
+    - [`GET /contracts`](#get-contracts)
+    - [`POST /contracts`](#post-contracts)
+    - [`GET /contracts/:contract_uuid`](#get-contractscontract_uuid)
+    - [`PATCH /contracts/:contract_uuid`](#patch-contractscontract_uuid)
+    - [`DELETE /contracts/:contract_uuid`](#delete-contractscontract_uuid)
+  - [4.2 Catalog Contracts](#42-catalog-contracts)
+    - [`GET /contract_catalog`](#get-contract_catalog)
+    - [`GET /contract_catalog/:contract_uuid`](#get-contract_catalogcontract_uuid)
+    - [`GET /contract_catalog/admin`](#get-contract_catalogadmin)
+    - [`GET /contract_catalog/admin/:contract_uuid`](#get-contract_catalogadmincontract_uuid)
+    - [`POST /contract_catalog/admin`](#post-contract_catalogadmin)
+    - [`PATCH /contract_catalog/admin/:contract_uuid`](#patch-contract_catalogadmincontract_uuid)
+  - [4.3 AI Trigger](#43-ai-trigger)
+    - [`POST /ai/ai-codegen`](#post-aiai-codegen)
+    - [`POST /ai/ai-audit`](#post-aiai-audit)
+  - [4.4 Audits](#44-audits)
+    - [`GET /audits`](#get-audits)
+    - [`GET /audits/:audit_uuid`](#get-auditsaudit_uuid)
+  - [4.5 AI Findings](#45-ai-findings)
+    - [`GET /ai-findings/:ai_finding_uuid`](#get-ai-findingsai_finding_uuid)
+    - [`PATCH /ai-findings/:ai_finding_uuid`](#patch-ai-findingsai_finding_uuid)
+  - [4.6 Auditor Findings (User Contribution)](#46-auditor-findings-user-contribution)
+    - [`GET /auditor-findings`](#get-auditor-findings)
+    - [`POST /auditor-findings`](#post-auditor-findings)
+    - [`GET /auditor-findings/:auditor_finding_uuid`](#get-auditor-findingsauditor_finding_uuid)
+    - [`PATCH /auditor-findings/:auditor_finding_uuid`](#patch-auditor-findingsauditor_finding_uuid)
+    - [`PATCH /auditor-findings/:auditor_finding_uuid/submit`](#patch-auditor-findingsauditor_finding_uuidsubmit)
+  - [4.7 Admin Review](#47-admin-review)
+    - [`GET /admin/auditor-findings`](#get-adminauditor-findings)
+    - [`POST /admin/auditor-findings/:auditor_finding_uuid/approve`](#post-adminauditor-findingsauditor_finding_uuidapprove)
+    - [`POST /admin/auditor-findings/:auditor_finding_uuid/reject`](#post-adminauditor-findingsauditor_finding_uuidreject)
+  - [4.8 Me](#48-me)
+    - [`GET /me`](#get-me)
+    - [`GET /me/profile`](#get-meprofile)
+  - [4.9 Public Stats (Unauthenticated)](#49-public-stats-unauthenticated)
+    - [`GET /public-stats`](#get-public-stats)
+- [5) AI Flow (Synchronous)](#5-ai-flow-synchronous)
+
 ## 1) Base URL
 
 - Production: `https://<PROJECT_REF>.supabase.co/functions/v1`
@@ -409,302 +454,3 @@ All these endpoints require an admin user (`users.is_admin = true`).
 
 All AI requests (`codegen`, `audit`) follow a simple Request/Response pattern. The client waits for the response, which includes the `audit_id` and the generated results.
 
-## 6) cURL Template
-
-```bash
-curl -X GET "${BASE_URL}/me" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-## 7) cURL for all APIs
-
-Set the required UUIDs:
-
-```bash
-export CONTRACT_UUID="<contract_uuid>"
-export AUDIT_UUID="<audit_uuid>"
-export AI_FINDING_UUID="<ai_finding_uuid>"
-export AUDITOR_FINDING_UUID="<auditor_finding_uuid>"
-export CATALOG_CONTRACT_UUID="<catalog_contract_uuid>"
-```
-
-### 7.1 Contracts (User-owned)
-
-#### GET /contracts
-```bash
-curl -X GET "${BASE_URL}/contracts" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### POST /contracts
-```bash
-curl -X POST "${BASE_URL}/contracts" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "My Contract",
-    "source_code": [
-      { "path": "Contract.sol", "code": "pragma solidity ^0.8.0; contract A {}" }
-    ],
-    "language": "solidity",
-    "expired_at": "2026-12-31T23:59:59Z"
-  }'
-```
-
-#### GET /contracts/:contract_uuid
-```bash
-curl -X GET "${BASE_URL}/contracts/${CONTRACT_UUID}" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### PATCH /contracts/:contract_uuid
-```bash
-curl -X PATCH "${BASE_URL}/contracts/${CONTRACT_UUID}" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "New Name",
-    "source_code": [
-      { "path": "Contract.sol", "code": "pragma solidity ^0.8.0; contract A { uint x; }" }
-    ],
-    "status": "draft"
-  }'
-```
-
-#### DELETE /contracts/:contract_uuid
-```bash
-curl -X DELETE "${BASE_URL}/contracts/${CONTRACT_UUID}" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-### 7.2 Catalog Contracts
-
-#### GET /contract_catalog
-```bash
-curl -X GET "${BASE_URL}/contract_catalog" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### GET /contract_catalog/:contract_uuid
-```bash
-curl -X GET "${BASE_URL}/contract_catalog/${CATALOG_CONTRACT_UUID}" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### GET /contract_catalog/admin
-```bash
-curl -X GET "${BASE_URL}/contract_catalog/admin" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### GET /contract_catalog/admin/:contract_uuid
-```bash
-curl -X GET "${BASE_URL}/contract_catalog/admin/${CATALOG_CONTRACT_UUID}" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### POST /contract_catalog/admin
-```bash
-curl -X POST "${BASE_URL}/contract_catalog/admin" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Target A",
-    "source_code": [
-      { "path": "Target.sol", "code": "pragma solidity ^0.8.0; contract Target {}" }
-    ],
-    "language": "solidity",
-    "expired_at": "2026-12-31T23:59:59Z",
-    "reward_per_finding": 0
-  }'
-```
-
-#### PATCH /contract_catalog/admin/:contract_uuid
-```bash
-curl -X PATCH "${BASE_URL}/contract_catalog/admin/${CATALOG_CONTRACT_UUID}" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "name": "Updated Target",
-    "source_code": [
-      { "path": "Target.sol", "code": "pragma solidity ^0.8.0; contract Target { uint x; }" }
-    ],
-    "language": "solidity",
-    "expired_at": "2027-01-31T23:59:59Z",
-    "reward_per_finding": 5
-  }'
-```
-
-### 7.3 AI Trigger
-
-#### POST /ai/ai-codegen
-```bash
-curl -X POST "${BASE_URL}/ai/ai-codegen" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "prompt": "create a simple ERC20",
-    "contract_id": "'"${CONTRACT_UUID}"'"
-  }'
-```
-
-#### POST /ai/ai-audit
-```bash
-curl -X POST "${BASE_URL}/ai/ai-audit" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "code": "pragma solidity ^0.8.0; contract Vulnerable { ... }",
-    "contract_id": "'"${CONTRACT_UUID}"'"
-  }'
-```
-
-### 7.4 Audits
-
-#### GET /audits
-```bash
-curl -X GET "${BASE_URL}/audits?contract_id=${CONTRACT_UUID}&status=running" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### GET /audits/:audit_uuid
-```bash
-curl -X GET "${BASE_URL}/audits/${AUDIT_UUID}" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-### 7.5 AI Findings
-
-#### GET /ai-findings/:ai_finding_uuid
-```bash
-curl -X GET "${BASE_URL}/ai-findings/${AI_FINDING_UUID}" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### PATCH /ai-findings/:ai_finding_uuid
-```bash
-curl -X PATCH "${BASE_URL}/ai-findings/${AI_FINDING_UUID}" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "status": "accepted"
-  }'
-```
-
-### 7.6 Auditor Findings
-
-#### GET /auditor-findings
-```bash
-curl -X GET "${BASE_URL}/auditor-findings" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### POST /auditor-findings
-```bash
-curl -X POST "${BASE_URL}/auditor-findings" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "contract_id": "'"${CATALOG_CONTRACT_UUID}"'",
-    "title": "reentrancy",
-    "severity": "high",
-    "description": "state update after external call",
-    "line_start": 42,
-    "line_end": 50
-  }'
-```
-
-#### GET /auditor-findings/:auditor_finding_uuid
-```bash
-curl -X GET "${BASE_URL}/auditor-findings/${AUDITOR_FINDING_UUID}" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### PATCH /auditor-findings/:auditor_finding_uuid
-```bash
-curl -X PATCH "${BASE_URL}/auditor-findings/${AUDITOR_FINDING_UUID}" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "title": "access-control",
-    "severity": "medium",
-    "description": "missing onlyOwner on setter",
-    "line_start": 10,
-    "line_end": 20
-  }'
-```
-
-#### PATCH /auditor-findings/:auditor_finding_uuid/submit
-```bash
-curl -X PATCH "${BASE_URL}/auditor-findings/${AUDITOR_FINDING_UUID}/submit" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-### 7.7 Admin Review
-
-#### GET /admin/auditor-findings
-```bash
-curl -X GET "${BASE_URL}/admin/auditor-findings?review_status=submitted" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### POST /admin/auditor-findings/:auditor_finding_uuid/approve
-```bash
-curl -X POST "${BASE_URL}/admin/auditor-findings/${AUDITOR_FINDING_UUID}/approve" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### POST /admin/auditor-findings/:auditor_finding_uuid/reject
-```bash
-curl -X POST "${BASE_URL}/admin/auditor-findings/${AUDITOR_FINDING_UUID}/reject" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-### 7.8 Me
-
-#### GET /me
-```bash
-curl -X GET "${BASE_URL}/me" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-#### GET /me/profile
-```bash
-curl -X GET "${BASE_URL}/me/profile" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
-```
-
-### 7.9 Public Stats
-
-#### GET /public-stats
-```bash
-curl -X GET "${BASE_URL}/public-stats"
-```
