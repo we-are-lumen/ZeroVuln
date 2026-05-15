@@ -10,10 +10,8 @@ This document is for integrating the frontend with Supabase Edge Functions.
 - [4) Endpoint Detail (Request Body)](#4-endpoint-detail-request-body)
   - [4.1 Contracts (User-owned)](#41-contracts-user-owned)
     - [`GET /contracts`](#get-contracts)
-    - [`POST /contracts`](#post-contracts)
     - [`GET /contracts/:contract_uuid`](#get-contractscontract_uuid)
     - [`PATCH /contracts/:contract_uuid`](#patch-contractscontract_uuid)
-    - [`DELETE /contracts/:contract_uuid`](#delete-contractscontract_uuid)
   - [4.2 Catalog Contracts](#42-catalog-contracts)
     - [`GET /contract_catalog`](#get-contract_catalog)
     - [`GET /contract_catalog/:contract_uuid`](#get-contract_catalogcontract_uuid)
@@ -24,26 +22,17 @@ This document is for integrating the frontend with Supabase Edge Functions.
   - [4.3 AI Trigger](#43-ai-trigger)
     - [`POST /ai/ai-codegen`](#post-aiai-codegen)
     - [`POST /ai/ai-audit`](#post-aiai-audit)
-  - [4.4 Audits](#44-audits)
-    - [`GET /audits`](#get-audits)
-    - [`GET /audits/:audit_uuid`](#get-auditsaudit_uuid)
-  - [4.5 AI Findings](#45-ai-findings)
-    - [`GET /ai-findings/:ai_finding_uuid`](#get-ai-findingsai_finding_uuid)
-    - [`PATCH /ai-findings/:ai_finding_uuid`](#patch-ai-findingsai_finding_uuid)
-  - [4.6 Auditor Findings (User Contribution)](#46-auditor-findings-user-contribution)
+  - [4.4 Auditor Findings (User Contribution)](#44-auditor-findings-user-contribution)
     - [`GET /auditor-findings`](#get-auditor-findings)
     - [`POST /auditor-findings`](#post-auditor-findings)
-    - [`GET /auditor-findings/:auditor_finding_uuid`](#get-auditor-findingsauditor_finding_uuid)
-    - [`PATCH /auditor-findings/:auditor_finding_uuid`](#patch-auditor-findingsauditor_finding_uuid)
-    - [`PATCH /auditor-findings/:auditor_finding_uuid/submit`](#patch-auditor-findingsauditor_finding_uuidsubmit)
-  - [4.7 Admin Review](#47-admin-review)
+  - [4.5 Admin Review](#45-admin-review)
     - [`GET /admin/auditor-findings`](#get-adminauditor-findings)
     - [`POST /admin/auditor-findings/:auditor_finding_uuid/approve`](#post-adminauditor-findingsauditor_finding_uuidapprove)
     - [`POST /admin/auditor-findings/:auditor_finding_uuid/reject`](#post-adminauditor-findingsauditor_finding_uuidreject)
-  - [4.8 Me](#48-me)
+  - [4.6 Me](#46-me)
     - [`GET /me`](#get-me)
     - [`GET /me/profile`](#get-meprofile)
-  - [4.9 Public Stats (Unauthenticated)](#49-public-stats-unauthenticated)
+  - [4.7 Public Stats (Unauthenticated)](#47-public-stats-unauthenticated)
     - [`GET /public-stats`](#get-public-stats)
 - [5) AI Flow (Synchronous)](#5-ai-flow-synchronous)
 
@@ -98,29 +87,6 @@ General error return format:
 - Request body: none
 - Response: array of user-owned (non-catalog) contracts. Each item: `uuid, name, source_code, is_catalog, status, hash_sc, gas_estimate, language, reward_per_finding, expired_at, created_at, updated_at, audits[{ uuid, status, kind, created_at }]`.
 
-#### `POST /contracts`
-- Query params: none
-- Request body:
-```json
-{
-  "name": "My Contract",
-  "source_code": [
-    {
-      "path": "Contract.sol",
-      "code": "pragma solidity ^0.8.0; contract A {}"
-    }
-  ],
-  "language": "solidity",
-  "expired_at": "2026-12-31T23:59:59Z"
-}
-```
-- Body required fields:
-  - `source_code: object[] (JSON array of objects)`
-- Body optional fields:
-  - `name?: string`
-  - `language?: string` (default: `solidity`)
-  - `expired_at?: string (ISO datetime)`
-
 #### `GET /contracts/:contract_uuid`
 - Query params: none
 - Request body: none
@@ -147,10 +113,6 @@ General error return format:
   - `status?: "draft" | "audited"`
   - `hash_sc?: string`
   - `expired_at?: string (ISO datetime)`
-
-#### `DELETE /contracts/:contract_uuid`
-- Query params: none
-- Request body: none
 
 ### 4.2 Catalog Contracts
 
@@ -301,39 +263,7 @@ General response: status `200` with a payload containing `audit_id`, `contract_i
   - `remediation` is either a normalized `{ mode: "line", line, replacement_line }` / `{ mode: "function", function_name, replacement_function }` object, or `{ patch: {...} }`, or `null` if the model produced nothing applicable.
 
 
-### 4.4 Audits
-
-#### `GET /audits`
-- Query params (optional):
-  - `contract_id=<contract_uuid>`
-  - `status=<pending|running|succeeded|failed>`
-- Request body: none
-- Response: list of audits for the user's contract (excluding catalog), each item containing `uuid, status, kind, summary, started_at, completed_at, created_at, updated_at, contracts(...), ai_findings(count)`.
-
-#### `GET /audits/:audit_uuid`
-- Query params: none
-- Request body: none
-- Notes:
-  - All AI endpoints are synchronous, so polling is not required. The result is returned directly in the trigger response.
-  - Response includes `ai_findings`.
-
-### 4.5 AI Findings
-
-#### `GET /ai-findings/:ai_finding_uuid`
-- Query params: none
-- Request body: none
-
-#### `PATCH /ai-findings/:ai_finding_uuid`
-- Query params: none
-- Request body:
-```json
-{
-  "status": "accepted"
-}
-```
-- Allowed values: `open | fixed | dismissed | accepted`
-
-### 4.6 Auditor Findings (User Contribution)
+### 4.4 Auditor Findings (User Contribution)
 
 #### `GET /auditor-findings`
 - Query params: none
@@ -361,38 +291,7 @@ General response: status `200` with a payload containing `audit_id`, `contract_i
   - `line_end: number` (>= line_start)
 - Behavior: finding is immediately created with `review_status = "submitted"` and `submitted_at = now()`.
 
-#### `GET /auditor-findings/:auditor_finding_uuid`
-- Query params: none
-- Request body: none
-
-#### `PATCH /auditor-findings/:auditor_finding_uuid`
-- Query params: none
-- Request body (partial):
-```json
-{
-  "contract_id": "<catalog_contract_uuid>",
-  "title": "access-control",
-  "severity": "medium",
-  "description": "updated analysis",
-  "line_start": 10,
-  "line_end": 20
-}
-```
-- Body optional fields:
-  - `contract_id?: string` (must be a catalog contract)
-  - `title?: string`
-  - `severity?: "critical" | "high" | "medium" | "low" | "info"`
-  - `description?: string`
-  - `line_start?: number` (>=1)
-  - `line_end?: number` (>= line_start)
-- Cannot be updated if `review_status` is already `approved` or `rejected`.
-
-#### `PATCH /auditor-findings/:auditor_finding_uuid/submit`
-- Query params: none
-- Request body: none
-- Behavior: changes `review_status` to `submitted` and sets `submitted_at`. Only allowed from `draft` or `submitted` status.
-
-### 4.7 Admin Review
+### 4.5 Admin Review
 
 All these endpoints require an admin user (`users.is_admin = true`).
 
@@ -417,7 +316,7 @@ All these endpoints require an admin user (`users.is_admin = true`).
 - Request body: none
 - Behavior: Validates `review_status = "submitted"`, updates status to `rejected` + `decided_at = now()`.
 
-### 4.8 Me
+### 4.6 Me
 
 #### `GET /me`
 - Query params: none
@@ -429,7 +328,7 @@ All these endpoints require an admin user (`users.is_admin = true`).
 - Request body: none
 - Response: the user record (`uuid, wallet_address, is_admin, created_at, updated_at`) joined with `auditor_findings` authored by the user (`uuid, contract_id, severity, title, description, review_status, submitted_at, decided_at, line_start, line_end, dataset_uri, dataset_hash, reward_amount, created_at, updated_at`).
 
-### 4.9 Public Stats (Unauthenticated)
+### 4.7 Public Stats (Unauthenticated)
 
 #### `GET /public-stats`
 - Query params: none
