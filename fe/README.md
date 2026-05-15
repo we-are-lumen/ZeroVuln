@@ -9,7 +9,7 @@
 [![Shadcn UI](https://img.shields.io/badge/shadcn%2Fui-000000?logo=shadcnui&logoColor=white)](https://ui.shadcn.com/)
 [![Ethers.js](https://img.shields.io/badge/ethers.js-v6-274291)](https://docs.ethers.org/v6/)
 
-[Backend](../be) · [Training Pipeline](../scripts) · [Smart Contract](../smart-contract)
+[Backend](../be) · [Training Pipeline](../model-training) · [Smart Contract](../smart-contract)
 
 </div>
 

@@ -45,7 +45,7 @@ Selected 2 of 4 nodes for 0x4c2943931330f39ddd4916c3ba6a589a29e0cd006d58124942f8
 appended 1 line(s) from 5ffa7594-aab3-4987-bbfc-ec43fc9f2005
 
 Done. ok=5 failed=0 total=5 lines=5 -> ./datasets/from_0g.jsonl
-[0g-cli] 0g-compute-cli fine-tuning create-task --provider 0xA02b95Aa6886b1116C4f334eDe00381511E31A09 --model Qwen2.5-0.5B-Instruct --dataset-path ZeroVuln/scripts/datasets/from_0g.jsonl --config-path ZeroVuln/scripts/config-train.json
+[0g-cli] 0g-compute-cli fine-tuning create-task --provider 0xA02b95Aa6886b1116C4f334eDe00381511E31A09 --model Qwen2.5-0.5B-Instruct --dataset-path ZeroVuln/model-training/datasets/from_0g.jsonl --config-path ZeroVuln/model-training/config-train.json
 Detected testnet (chain ID: 16602)
 Uploading dataset to 0G Storage...
 
@@ -67,12 +67,12 @@ Created Task ID: 8cf9ff73-0925-493f-bf81-3a2418be110f
 [0g-cli] taskId=8cf9ff73-0925-493f-bf81-3a2418be110f status=Trained
 [0g-cli] taskId=8cf9ff73-0925-493f-bf81-3a2418be110f status=Delivering
 [0g-cli] taskId=8cf9ff73-0925-493f-bf81-3a2418be110f status=Delivered
-[0g-cli] 0g-compute-cli fine-tuning acknowledge-model --provider 0xA02b95Aa6886b1116C4f334eDe00381511E31A09 --task-id 8cf9ff73-0925-493f-bf81-3a2418be110f --data-path ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.encrypted
+[0g-cli] 0g-compute-cli fine-tuning acknowledge-model --provider 0xA02b95Aa6886b1116C4f334eDe00381511E31A09 --task-id 8cf9ff73-0925-493f-bf81-3a2418be110f --data-path ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.encrypted
 Detected testnet (chain ID: 16602)
 [INFO] 2026-05-13T14:46:51.168Z - Downloading model from 0G Storage...
 [WARN] 2026-05-13T14:46:51.372Z - 0G Storage download failed: Error: spawn ENOEXEC. Falling back to TEE download...
 Downloading LoRA model from TEE: https://c7cc765f4c608423b97eb2efd11616a50c1f7084-3082.dstack-pha-in2.phala.network/v1/user/0x8540784B5FCcEb3045d1bc1f74919C7c41C12Fd6/task/8cf9ff73-0925-493f-bf81-3a2418be110f/lora (attempt 1/3)
-LoRA model downloaded from TEE and saved to ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.encrypted (93642246 bytes)
+LoRA model downloaded from TEE and saved to ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.encrypted (93642246 bytes)
 [INFO] 2026-05-13T14:47:11.035Z - Successfully downloaded LoRA model from TEE (fallback)
 [WARN] 2026-05-13T14:47:15.822Z - Hash mismatch for task 8cf9ff73-0925-493f-bf81-3a2418be110f: expected 0xa007eef941aa484c1b3751be757c875083458f833e2bd348ff68e1261f07667c, got 0xe0ae907f974f5e78364197dc2c8e589c0ecf19510bdca47f4964366a9b766974
 sending tx with gas price 4000000007n
@@ -81,24 +81,24 @@ Acknowledged model
 [0g-cli] taskId=8cf9ff73-0925-493f-bf81-3a2418be110f status=Delivered
 [0g-cli] taskId=8cf9ff73-0925-493f-bf81-3a2418be110f status=UserAcknowledged
 [0g-cli] taskId=8cf9ff73-0925-493f-bf81-3a2418be110f status=Finished
-[0g-cli] 0g-compute-cli fine-tuning decrypt-model --provider 0xA02b95Aa6886b1116C4f334eDe00381511E31A09 --task-id 8cf9ff73-0925-493f-bf81-3a2418be110f --encrypted-model ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.encrypted --output ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.zip
+[0g-cli] 0g-compute-cli fine-tuning decrypt-model --provider 0xA02b95Aa6886b1116C4f334eDe00381511E31A09 --task-id 8cf9ff73-0925-493f-bf81-3a2418be110f --encrypted-model ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.encrypted --output ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.zip
 Detected testnet (chain ID: 16602)
 Decrypted model
-[0g-cli] fine-tune complete. encrypted=ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.encrypted decrypted=ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.zip
-[spawn] python3 ZeroVuln/scripts/merge_and_push.py --adapter-zip ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.zip --work-dir ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f --base-model Qwen/Qwen2.5-0.5B-Instruct --merged-out ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f/merged --repo-id althof3/zeroVuln
-[merge] unzipping ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.zip -> ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f
-[merge] adapter dir = ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f/output_model
+[0g-cli] fine-tune complete. encrypted=ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.encrypted decrypted=ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.zip
+[spawn] python3 ZeroVuln/model-training/merge_and_push.py --adapter-zip ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.zip --work-dir ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f --base-model Qwen/Qwen2.5-0.5B-Instruct --merged-out ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f/merged --repo-id althof3/zeroVuln
+[merge] unzipping ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f.zip -> ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f
+[merge] adapter dir = ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f/output_model
 [merge] base=Qwen/Qwen2.5-0.5B-Instruct dtype=torch.float16
 [transformers] `torch_dtype` is deprecated! Use `dtype` instead!
 Loading weights: 100%|██████████████████████████████████████████████████████████████| 290/290 [00:02<00:00, 125.69it/s]
 [merge] loading adapter ...
 [merge] merge_and_unload ...
-[merge] saving merged model -> ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f/merged
+[merge] saving merged model -> ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f/merged
 Writing model shards: 100%|██████████████████████████████████████████████████████████████| 1/1 [00:02<00:00,  2.48s/it]
-[merge] tokenizer saved from ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f/output_model
+[merge] tokenizer saved from ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f/output_model
 [push] login + creating repo (private=False) althof3/zeroVuln
 Note: Environment variable`HF_TOKEN` is set and is the current active token independently from the token you've just configured.
-[push] uploading folder ZeroVuln/scripts/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f/merged -> althof3/zeroVuln
+[push] uploading folder ZeroVuln/model-training/fine_tuned_model/task-8cf9ff73-0925-493f-bf81-3a2418be110f/merged -> althof3/zeroVuln
 Processing Files (2 / 2)      : 100%|█████████████████████████████████████████████████████| 1.00GB / 1.00GB, 1.83MB/s  
 New Data Upload               : 100%|█████████████████████████████████████████████████████|  716MB /  716MB, 1.83MB/s  
   ...10f/merged/tokenizer.json: 100%|█████████████████████████████████████████████████████| 11.4MB / 11.4MB            

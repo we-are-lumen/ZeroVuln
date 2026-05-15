@@ -12,7 +12,7 @@
 [![Pattern](https://img.shields.io/badge/Pattern-Checks_Effects_Interactions-2ecc71)](https://docs.soliditylang.org/en/latest/security-considerations.html)
 [![Guard](https://img.shields.io/badge/ReentrancyGuard-minimal-blue)]()
 
-[Backend](../be) · [Frontend](../fe) · [Training Pipeline](../scripts)
+[Backend](../be) · [Frontend](../fe) · [Training Pipeline](../model-training)
 
 </div>
 
@@ -154,7 +154,7 @@ smart-contract/
 
 - **[`contracts/ZVContract.sol`](./contracts/ZVContract.sol)** — single source of truth for fees, rewards, and events.
 - **[`../be/README.md`](../be/README.md)** — backend integration of fee verification and admin approval flow.
-- **[`../scripts/README.md`](../scripts/README.md)** — how approved findings feed the AI training loop.
+- **[`../model-training/README.md`](../model-training/README.md)** — how approved findings feed the AI training loop.
 
 ---
 
