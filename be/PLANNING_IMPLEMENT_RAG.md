@@ -229,7 +229,19 @@ async function analyzeWithRAG(contractSource: string) {
   return allFindings
 }
 ```
+``` typescript
+import VoyageAI from "voyageai"
 
+const voyage = new VoyageAI({ apiKey: process.env.VOYAGE_API_KEY })
+
+async function embedText(text: string): Promise<number[]> {
+  const result = await voyage.embed({
+    input: text,
+    model: "voyage-code-2",  // ditraining khusus untuk source code
+  })
+  return result.data[0].embedding  // float[]
+}
+```
 ---
 
 ## Arsitektur Final

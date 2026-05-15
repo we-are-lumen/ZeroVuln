@@ -2,10 +2,12 @@
   "version": "5",
   "specifiers": {
     "npm:@0gfoundation/0g-ts-sdk@1.2.8": "1.2.8_ethers@6.16.0",
+    "npm:@qdrant/js-client-rest@^1.18.0": "1.18.0_typescript@5.9.3",
     "npm:@supabase/supabase-js@^2.45.0": "2.105.4",
     "npm:ethers@6.13.0": "6.13.0",
     "npm:ethers@^6.16.0": "6.16.0",
-    "npm:typescript@^5.5.0": "5.9.3"
+    "npm:typescript@^5.5.0": "5.9.3",
+    "npm:voyageai@~0.2.1": "0.2.1"
   },
   "npm": {
     "@0gfoundation/0g-ts-sdk@1.2.8_ethers@6.16.0": {
@@ -60,6 +62,17 @@
     },
     "@noble/hashes@1.8.0": {
       "integrity": "sha512-jCs9ldd7NwzpgXDIf6P3+NrHh9/sD6CQdxHyjQI+h/6rDNo88ypBxxz45UDuZHz9r3tNz7N/VInSVoVdtXEI4A=="
+    },
+    "@qdrant/js-client-rest@1.18.0_typescript@5.9.3": {
+      "integrity": "sha512-/0dqX5uV9chC1DnYSnU4gNMrDqse/pt6hHg3Rqqpl5isH7xl1xSNvffjzBoxycDD79luWn7Ho6Rh/61sOs5DNw==",
+      "dependencies": [
+        "@qdrant/openapi-typescript-fetch",
+        "typescript",
+        "undici"
+      ]
+    },
+    "@qdrant/openapi-typescript-fetch@1.2.6": {
+      "integrity": "sha512-oQG/FejNpItrxRHoyctYvT3rwGZOnK4jr3JdppO/c78ktDvkWiPXPHNsrDf33K9sZdRb6PR7gi4noIapu5q4HA=="
     },
     "@supabase/auth-js@2.105.4": {
       "integrity": "sha512-Ejfa37M5xoIwoxVebxRahnwubPo8g22qkXQ4p50+N9MIvU9UZoN+A8dwVPtczzGf8oV/YXN80ZPxK4aWXuSN/A==",
@@ -347,6 +360,12 @@
     "next-tick@1.1.0": {
       "integrity": "sha512-CXdUiJembsNjuToQvxayPZF9Vqht7hewsvy2sOWafLvi2awflj9mOC6bHIg50orX8IJvWKY9wYQ/zB2kogPslQ=="
     },
+    "node-fetch@2.7.0": {
+      "integrity": "sha512-c4FRfUm/dbcWZ7U+1Wq0AwCyFL+3nt2bEw05wfxSz+DWpWsitgmSgYmy2dQdWyKC1694ELPqMs/YzUSNozLt8A==",
+      "dependencies": [
+        "whatwg-url"
+      ]
+    },
     "node-gyp-build@4.8.4": {
       "integrity": "sha512-LA4ZjwlnUblHVgq0oBF3Jl/6h/Nvs5fzBLwdEF4nuxnFdsfajde4WfxtJr3CaiH+F6ewcIB/q4jQ4UzPyid+CQ==",
       "bin": true
@@ -362,6 +381,9 @@
     },
     "reconnecting-websocket@4.4.0": {
       "integrity": "sha512-D2E33ceRPga0NvTDhJmphEgJ7FUYF0v4lr1ki0csq06OdlxKfugGzN0dSkxM/NfqCxYELK4KcaTOUOjTV6Dcng=="
+    },
+    "tr46@0.0.3": {
+      "integrity": "sha512-N3WMsuqV66lT30CrXNbEjx4GEwlow3v6rr4mCcv6prnfwhS01rkgyFdjPNBYd9br7LpXV1+Emh01fHnq2Gdgrw=="
     },
     "tslib@2.4.0": {
       "integrity": "sha512-d6xOpEDfsi2CZVlPQzGeux8XMwLT9hssAsaPYExaQMuYskwb+x1x7J371tWlbBdWHroy99KnVB6qIkUbs5X3UQ=="
@@ -388,12 +410,24 @@
     "undici-types@6.19.8": {
       "integrity": "sha512-ve2KP6f/JnbPBFyobGHuerC9g1FYGn/F8n1LWTwNxCEzd6IfqTwUQcNXgEtmmQ6DlRrC1hrSrBnCZPokRrDHjw=="
     },
+    "undici@6.25.0": {
+      "integrity": "sha512-ZgpWDC5gmNiuY9CnLVXEH8rl50xhRCuLNA97fAUnKi8RRuV4E6KG31pDTsLVUKnohJE0I3XDrTeEydAXRw47xg=="
+    },
     "utf-8-validate@5.0.10": {
       "integrity": "sha512-Z6czzLq4u8fPOyx7TU6X3dvUZVvoJmxSQ+IcrlmagKhilxlhZgxPK6C5Jqbkw1IDUmFTM+cz9QDnnLTwDz/2gQ==",
       "dependencies": [
         "node-gyp-build"
       ],
       "scripts": true
+    },
+    "voyageai@0.2.1": {
+      "integrity": "sha512-ym7Dk6p8Si6lR9wDh58EzxwT0ziD/pqXjzzzceOSySO3Ic3uosHZLOTAsb3Gq+1OaKdEMnni/p8TohKUNvLTkg==",
+      "dependencies": [
+        "node-fetch"
+      ]
+    },
+    "webidl-conversions@3.0.1": {
+      "integrity": "sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ=="
     },
     "websocket@1.0.35": {
       "integrity": "sha512-/REy6amwPZl44DDzvRCkaI1q1bIiQB0mEFQLUrhz3z2EK91cp3n72rAjUlrTP0zV22HJIUOVHQGPxhFRjxjt+Q==",
@@ -404,6 +438,13 @@
         "typedarray-to-buffer",
         "utf-8-validate",
         "yaeti"
+      ]
+    },
+    "whatwg-url@5.0.0": {
+      "integrity": "sha512-saE57nupxk6v3HY35+jzBwYa0rKSy0XR8JSxZPwgLr7ys0IBzhGviA1/TUGJLmSVqs8pb9AnvICXEuOHLprYTw==",
+      "dependencies": [
+        "tr46",
+        "webidl-conversions"
       ]
     },
     "ws@8.17.1": {
@@ -457,9 +498,11 @@
     "packageJson": {
       "dependencies": [
         "npm:@0gfoundation/0g-ts-sdk@1.2.8",
+        "npm:@qdrant/js-client-rest@^1.18.0",
         "npm:@supabase/supabase-js@^2.45.0",
         "npm:ethers@^6.16.0",
-        "npm:typescript@^5.5.0"
+        "npm:typescript@^5.5.0",
+        "npm:voyageai@~0.2.1"
       ]
     }
   }

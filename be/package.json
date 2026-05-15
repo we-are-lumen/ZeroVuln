@@ -9,8 +9,10 @@
   },
   "dependencies": {
     "@0gfoundation/0g-ts-sdk": "1.2.8",
+    "@qdrant/js-client-rest": "^1.18.0",
     "@supabase/supabase-js": "^2.45.0",
-    "ethers": "^6.16.0"
+    "ethers": "^6.16.0",
+    "voyageai": "^0.2.1"
   },
   "devDependencies": {
     "typescript": "^5.5.0"

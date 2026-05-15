@@ -1,6 +1,8 @@
 import { resolveUser, unauthorized, forbidden, notFound, badRequest, serverError, json, supabase, corsPreflight } from '../_shared/supabase.ts';
 import { uploadToOgStorage } from '../_shared/og-storage.ts';
 import { allocateRewardFromCatalogOnchain } from '../_shared/zv-contract.ts';
+import { VoyageAIClient } from 'npm:voyageai@0.2.1';
+import { QdrantClient } from 'npm:@qdrant/js-client-rest@1.18.0';
 
 type DenoRuntime = {
   env: { get(name: string): string | undefined };
@@ -30,11 +32,34 @@ interface RagFindingRecord {
 const runtimeDeno = (globalThis as typeof globalThis & { Deno?: DenoRuntime }).Deno;
 const env = runtimeDeno?.env;
 
-const AI_EMBEDDING_API_URL = env?.get('AI_EMBEDDING_API_URL') || 'https://ai.sumopod.com/v1/embeddings';
-const AI_EMBEDDING_MODEL = env?.get('AI_EMBEDDING_MODEL') || 'text-embedding-3-small';
+const VOYAGE_API_KEY = env?.get('VOYAGE_API_KEY') || '';
+const VOYAGE_MODEL = env?.get('VOYAGE_MODEL') || 'voyage-code-2';
 const QDRANT_URL = (env?.get('QDRANT_URL') || '').replace(/\/+$/, '');
 const QDRANT_API_KEY = env?.get('QDRANT_API_KEY') || '';
 const QDRANT_COLLECTION = env?.get('QDRANT_COLLECTION') || 'zerovuln_audit_findings';
+
+let cachedVoyageClient: VoyageAIClient | null = null;
+let cachedQdrantClient: QdrantClient | null = null;
+let qdrantCollectionReady = false;
+
+function getVoyageClient(): VoyageAIClient | null {
+  if (!VOYAGE_API_KEY) return null;
+  if (!cachedVoyageClient) {
+    cachedVoyageClient = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
+  }
+  return cachedVoyageClient;
+}
+
+function getQdrantClient(): QdrantClient | null {
+  if (!QDRANT_URL) return null;
+  if (!cachedQdrantClient) {
+    cachedQdrantClient = new QdrantClient({
+      url: QDRANT_URL,
+      apiKey: QDRANT_API_KEY || undefined,
+    });
+  }
+  return cachedQdrantClient;
+}
 
 if (!runtimeDeno) {
   throw new Error('Deno runtime is not available');
@@ -261,44 +286,27 @@ async function sha256Hex(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest)).map((byte) => byte.toString(16).padStart(2, '0')).join('');
 }
 
-function getEmbeddingApiKey(): string {
-  return env?.get('AI_EMBEDDING_API_KEY') || env?.get('AI_API_KEY') || '';
-}
-
 function isRagConfigured(): boolean {
-  return Boolean(QDRANT_URL && getEmbeddingApiKey());
+  return Boolean(QDRANT_URL && VOYAGE_API_KEY);
 }
 
 async function embedText(text: string): Promise<number[]> {
-  const apiKey = getEmbeddingApiKey();
-  if (!apiKey) {
-    console.warn('Approved finding RAG skipped: embedding API key is not configured');
+  const client = getVoyageClient();
+  if (!client) {
+    console.warn('Approved finding RAG skipped: VOYAGE_API_KEY is not configured');
     return [];
   }
 
-  const response = await fetch(AI_EMBEDDING_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: AI_EMBEDDING_MODEL,
-      input: text,
-    }),
+  const result = await client.embed({
+    input: text,
+    model: VOYAGE_MODEL,
   });
 
-  if (!response.ok) {
-    const errBody = await response.text();
-    throw new Error(`Embedding API ${response.status}: ${errBody}`);
-  }
-
-  const data = await response.json() as Record<string, unknown>;
-  const items = Array.isArray(data.data) ? data.data : [];
-  const first = items[0] as Record<string, unknown> | undefined;
+  const items = Array.isArray(result?.data) ? result.data : [];
+  const first = items[0] as { embedding?: unknown } | undefined;
   const embedding = first?.embedding;
   if (!Array.isArray(embedding)) {
-    throw new Error('Embedding API returned an invalid vector');
+    throw new Error('Voyage embed returned an invalid vector');
   }
 
   return embedding
@@ -306,64 +314,38 @@ async function embedText(text: string): Promise<number[]> {
     .filter((value) => Number.isFinite(value));
 }
 
-function qdrantHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (QDRANT_API_KEY) headers['api-key'] = QDRANT_API_KEY;
-  return headers;
-}
+async function ensureQdrantCollection(client: QdrantClient, vectorSize: number): Promise<void> {
+  if (vectorSize <= 0 || qdrantCollectionReady) return;
 
-async function qdrantRequest(path: string, init: RequestInit, allow404 = false): Promise<Response | null> {
-  if (!QDRANT_URL) return null;
-
-  const extraHeaders = init.headers ? Object.fromEntries(new Headers(init.headers).entries()) : {};
-  const response = await fetch(`${QDRANT_URL}${path}`, {
-    ...init,
-    headers: {
-      ...qdrantHeaders(),
-      ...extraHeaders,
-    },
-  });
-
-  if (allow404 && response.status === 404) return null;
-  if (!response.ok) {
-    const errBody = await response.text();
-    throw new Error(`Qdrant ${response.status}: ${errBody}`);
+  try {
+    await client.getCollection(QDRANT_COLLECTION);
+    qdrantCollectionReady = true;
+    return;
+  } catch (error) {
+    const status = (error as { status?: number })?.status;
+    if (status && status !== 404) throw error;
   }
-  return response;
-}
 
-async function ensureQdrantCollection(vectorSize: number): Promise<void> {
-  if (!QDRANT_URL || vectorSize <= 0) return;
-
-  const existing = await qdrantRequest(`/collections/${QDRANT_COLLECTION}`, { method: 'GET' }, true);
-  if (existing) return;
-
-  await qdrantRequest(`/collections/${QDRANT_COLLECTION}`, {
-    method: 'PUT',
-    body: JSON.stringify({
-      vectors: {
-        size: vectorSize,
-        distance: 'Cosine',
-      },
-    }),
+  await client.createCollection(QDRANT_COLLECTION, {
+    vectors: { size: vectorSize, distance: 'Cosine' },
   });
+  qdrantCollectionReady = true;
 }
 
 async function upsertQdrantPoint(id: string, vector: number[], payload: Record<string, unknown>): Promise<void> {
-  if (!QDRANT_URL || vector.length === 0) return;
+  const client = getQdrantClient();
+  if (!client || vector.length === 0) return;
 
-  await ensureQdrantCollection(vector.length);
-  await qdrantRequest(`/collections/${QDRANT_COLLECTION}/points?wait=true`, {
-    method: 'PUT',
-    body: JSON.stringify({
-      points: [
-        {
-          id,
-          vector,
-          payload,
-        },
-      ],
-    }),
+  await ensureQdrantCollection(client, vector.length);
+  await client.upsert(QDRANT_COLLECTION, {
+    wait: true,
+    points: [
+      {
+        id,
+        vector,
+        payload,
+      },
+    ],
   });
 }
 

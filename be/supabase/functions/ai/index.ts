@@ -1,5 +1,7 @@
 import { resolveUser, unauthorized, notFound, badRequest, serverError, json, supabase, corsPreflight } from '../_shared/supabase.ts';
 import { uploadToOgStorage, fetchFromOgStorage } from '../_shared/og-storage.ts';
+import { VoyageAIClient } from 'npm:voyageai@0.2.1';
+import { QdrantClient } from 'npm:@qdrant/js-client-rest@1.18.0';
 
 type DenoRuntime = {
   env: { get(name: string): string | undefined };
@@ -126,12 +128,35 @@ const env = runtimeDeno?.env;
 
 const AI_CHAT_API_URL = env?.get('AI_CHAT_API_URL') || 'https://ai.sumopod.com/v1/chat/completions';
 const AI_CHAT_MODEL = env?.get('AI_CHAT_MODEL') || 'gemini/gemini-3.1-flash-lite-preview';
-const AI_EMBEDDING_API_URL = env?.get('AI_EMBEDDING_API_URL') || 'https://ai.sumopod.com/v1/embeddings';
-const AI_EMBEDDING_MODEL = env?.get('AI_EMBEDDING_MODEL') || 'text-embedding-3-small';
+const VOYAGE_API_KEY = env?.get('VOYAGE_API_KEY') || '';
+const VOYAGE_MODEL = env?.get('VOYAGE_MODEL') || 'voyage-code-2';
 const QDRANT_URL = (env?.get('QDRANT_URL') || '').replace(/\/+$/, '');
 const QDRANT_API_KEY = env?.get('QDRANT_API_KEY') || '';
 const QDRANT_COLLECTION = env?.get('QDRANT_COLLECTION') || 'zerovuln_audit_findings';
 const RAG_TOP_K = Math.max(1, Number.parseInt(env?.get('RAG_TOP_K') || '5', 10) || 5);
+
+let cachedVoyageClient: VoyageAIClient | null = null;
+let cachedQdrantClient: QdrantClient | null = null;
+let qdrantCollectionReady = false;
+
+function getVoyageClient(): VoyageAIClient | null {
+  if (!VOYAGE_API_KEY) return null;
+  if (!cachedVoyageClient) {
+    cachedVoyageClient = new VoyageAIClient({ apiKey: VOYAGE_API_KEY });
+  }
+  return cachedVoyageClient;
+}
+
+function getQdrantClient(): QdrantClient | null {
+  if (!QDRANT_URL) return null;
+  if (!cachedQdrantClient) {
+    cachedQdrantClient = new QdrantClient({
+      url: QDRANT_URL,
+      apiKey: QDRANT_API_KEY || undefined,
+    });
+  }
+  return cachedQdrantClient;
+}
 
 // const AI_CODEGEN_SYSTEM_PROMPT = "Target: Lead Blockchain Security Architect and Smart Contract Auditor.\nRole: Generate high-security Solidity smart contracts and provide a detailed forensic trace of an averted attack.\n\nOperational Rules:\n1. Standards: Solidity ^0.8.20, OpenZeppelin (AccessControl, ReentrancyGuard, SafeERC20).\n2. Patterns: Checks-Effects-Interactions, Pull-over-Push.\n3. Output Requirement: Valid JSON only. Do NOT use markdown code blocks, backticks, or conversational text.\n\nCRITICAL WORKFLOW:\nStep 1: Generate a production-ready Solidity contract.\nStep 2: Identify specific mitigations within the code line-by-line.\nStep 3: Simulate a flow tracing of a failed hack attempt against this implementation.\n\nJSON Structure:\n{\n  \"code\": \"string (Use \\n for new lines and escape internal quotes)\",\n  \"vulnerability_mitigations\": [\n    {\n      \"name\": \"string\",\n      \"reason\": \"string\",\n      \"start_line\": number,\n      \"end_line\": number\n    }\n  ]\n}\n\nConstraint: The response must be a single raw JSON object.";
 // const AI_CODEAUDIT_SYSTEM_PROMPT = "Role: You are a senior smart contract auditor. Analyze the provided Solidity source for vulnerabilities and provide a production-ready fix.\n\nProtocol:\n1. Treat the source as a 1-based list of lines.\n2. Audit for critical, high, medium, low, and informational issues.\n3. Produce a corrected code_fixed version using OpenZeppelin standards and the CEI pattern when relevant.\n4. Map exact line numbers from the original input.\n\nOutput rules:\n- JSON only.\n- No markdown wrappers.\n- Start with { and end with }.\n- suggested_code must be a verbatim extract from code_fixed.\n\nJSON Schema:\n{\n  \"code_fixed\": \"string\",\n  \"vulnerabilities\": [\n    {\n      \"name\": \"string\",\n      \"reasoning_trace\": [\"string\"],\n      \"start_line\": number,\n      \"end_line\": number,\n      \"severity\": \"critical|high|medium|low|info\",\n      \"confidence\": number,\n      \"suggested_code\": \"string\",\n      \"attack_trace\": {\n        \"traceId\": \"string\",\n        \"nodes\": [{ \"id\": \"string\", \"label\": \"string\", \"type\": \"string\", \"address\": \"string\" }],\n        \"edges\": [{ \"from\": \"string\", \"to\": \"string\", \"label\": \"string\" }]\n      }\n    }\n  ]\n}";
@@ -259,44 +284,27 @@ async function aiFetch(payload: AIChatPayload): Promise<Response> {
   });
 }
 
-function getEmbeddingApiKey(): string {
-  return env?.get('AI_EMBEDDING_API_KEY') || env?.get('AI_API_KEY') || '';
-}
-
 function isRagConfigured(): boolean {
-  return Boolean(QDRANT_URL && getEmbeddingApiKey());
+  return Boolean(QDRANT_URL && VOYAGE_API_KEY);
 }
 
 async function embedText(text: string): Promise<number[]> {
-  const apiKey = getEmbeddingApiKey();
-  if (!apiKey) {
-    console.warn('RAG embedding skipped: embedding API key is not configured');
+  const client = getVoyageClient();
+  if (!client) {
+    console.warn('RAG embedding skipped: VOYAGE_API_KEY is not configured');
     return [];
   }
 
-  const response = await fetch(AI_EMBEDDING_API_URL, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model: AI_EMBEDDING_MODEL,
-      input: text,
-    }),
+  const result = await client.embed({
+    input: text,
+    model: VOYAGE_MODEL,
   });
 
-  if (!response.ok) {
-    const errBody = await response.text();
-    throw new Error(`Embedding API ${response.status}: ${errBody}`);
-  }
-
-  const data = await response.json() as Record<string, unknown>;
-  const items = Array.isArray(data.data) ? data.data : [];
-  const first = items[0] as Record<string, unknown> | undefined;
+  const items = Array.isArray(result?.data) ? result.data : [];
+  const first = items[0] as { embedding?: unknown } | undefined;
   const embedding = first?.embedding;
   if (!Array.isArray(embedding)) {
-    throw new Error('Embedding API returned an invalid vector');
+    throw new Error('Voyage embed returned an invalid vector');
   }
 
   return embedding
@@ -304,90 +312,61 @@ async function embedText(text: string): Promise<number[]> {
     .filter((value) => Number.isFinite(value));
 }
 
-function qdrantHeaders(): Record<string, string> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (QDRANT_API_KEY) {
-    headers['api-key'] = QDRANT_API_KEY;
+async function ensureQdrantCollection(client: QdrantClient, vectorSize: number): Promise<void> {
+  if (vectorSize <= 0 || qdrantCollectionReady) return;
+
+  try {
+    await client.getCollection(QDRANT_COLLECTION);
+    qdrantCollectionReady = true;
+    return;
+  } catch (error) {
+    const status = (error as { status?: number })?.status;
+    if (status && status !== 404) throw error;
   }
-  return headers;
-}
 
-async function qdrantRequest(path: string, init: RequestInit, allow404 = false): Promise<Response | null> {
-  if (!QDRANT_URL) return null;
-
-  const extraHeaders = init.headers ? Object.fromEntries(new Headers(init.headers).entries()) : {};
-  const response = await fetch(`${QDRANT_URL}${path}`, {
-    ...init,
-    headers: {
-      ...qdrantHeaders(),
-      ...extraHeaders,
-    },
+  await client.createCollection(QDRANT_COLLECTION, {
+    vectors: { size: vectorSize, distance: 'Cosine' },
   });
-
-  if (allow404 && response.status === 404) return null;
-  if (!response.ok) {
-    const errBody = await response.text();
-    throw new Error(`Qdrant ${response.status}: ${errBody}`);
-  }
-  return response;
-}
-
-async function ensureQdrantCollection(vectorSize: number): Promise<void> {
-  if (!QDRANT_URL || vectorSize <= 0) return;
-
-  const existing = await qdrantRequest(`/collections/${QDRANT_COLLECTION}`, { method: 'GET' }, true);
-  if (existing) return;
-
-  await qdrantRequest(`/collections/${QDRANT_COLLECTION}`, {
-    method: 'PUT',
-    body: JSON.stringify({
-      vectors: {
-        size: vectorSize,
-        distance: 'Cosine',
-      },
-    }),
-  });
+  qdrantCollectionReady = true;
 }
 
 async function searchQdrant(vector: number[], limit: number): Promise<QdrantSearchPoint[]> {
-  if (!QDRANT_URL || vector.length === 0) return [];
+  const client = getQdrantClient();
+  if (!client || vector.length === 0) return [];
 
-  const response = await qdrantRequest(`/collections/${QDRANT_COLLECTION}/points/query`, {
-    method: 'POST',
-    body: JSON.stringify({
-      query: vector,
+  try {
+    const results = await client.search(QDRANT_COLLECTION, {
+      vector,
       limit,
       with_payload: true,
       with_vector: false,
-    }),
-  }, true);
+    });
 
-  if (!response) return [];
-
-  const data = await response.json() as Record<string, unknown>;
-  const result = data.result;
-  if (Array.isArray(result)) return result as QdrantSearchPoint[];
-  if (result && typeof result === 'object' && Array.isArray((result as { points?: unknown[] }).points)) {
-    return (result as { points: QdrantSearchPoint[] }).points;
+    return results.map((point: { id: number | string; payload?: Record<string, unknown> | null }) => ({
+      id: String(point.id),
+      payload: (point.payload ?? {}) as QdrantPointPayload,
+    }));
+  } catch (error) {
+    const status = (error as { status?: number })?.status;
+    if (status === 404) return [];
+    throw error;
   }
-  return [];
 }
 
 async function upsertQdrantPoint(id: string, vector: number[], payload: QdrantPointPayload): Promise<void> {
-  if (!QDRANT_URL || vector.length === 0) return;
+  const client = getQdrantClient();
+  if (!client || vector.length === 0) return;
 
-  await ensureQdrantCollection(vector.length);
-  await qdrantRequest(`/collections/${QDRANT_COLLECTION}/points?wait=true`, {
-    method: 'PUT',
-    body: JSON.stringify({
-      points: [
-        {
-          id,
-          vector,
-          payload,
-        },
-      ],
-    }),
+  await ensureQdrantCollection(client, vector.length);
+  await client.upsert(QDRANT_COLLECTION, {
+    wait: true,
+    points: [
+      {
+        id,
+        vector,
+        payload: payload as Record<string, unknown>,
+      },
+    ],
   });
 }
 
@@ -1163,12 +1142,6 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
   }
 }
 
-function normalizeSeverity(value: unknown): string {
-  const valid = ['critical', 'high', 'medium', 'low', 'info'];
-  if (typeof value === 'string' && valid.includes(value.toLowerCase())) return value.toLowerCase();
-  return 'medium';
-}
-
 type FindingPatchOp = 'replace' | 'insert_before' | 'insert_after' | 'delete';
 type FindingPatch = {
   op: FindingPatchOp;
@@ -1374,15 +1347,4 @@ interface AuditVulnerability {
   remediation?: unknown;
   patch?: unknown;
   attack_trace?: unknown;
-}
-
-function parseAuditResponse(aiData: unknown): { code_fixed: string; vulnerabilities: AuditVulnerability[] } {
-  const payload = extractAIContent(aiData);
-  if (payload && typeof payload === 'object') {
-    const p = payload as { code_fixed?: unknown; vulnerabilities?: unknown };
-    const code_fixed = typeof p.code_fixed === 'string' ? p.code_fixed : '';
-    const vulnerabilities = Array.isArray(p.vulnerabilities) ? p.vulnerabilities as AuditVulnerability[] : [];
-    return { code_fixed, vulnerabilities };
-  }
-  return { code_fixed: '', vulnerabilities: [] };
 }
