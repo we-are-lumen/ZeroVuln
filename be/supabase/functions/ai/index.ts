@@ -379,7 +379,7 @@ async function handleCodegen(_req: Request, auth: { user_id: number }, body: Rec
         status: 'draft',
         source_code: [],
       })
-      .select('id, uuid')
+      .select('id, uuid, name')
       .single();
 
     if (contractError || !newContract) {
@@ -578,7 +578,7 @@ async function handleAudit(_req: Request, auth: { user_id: number }, body: Recor
         status: 'draft',
         source_code: codeStringToSourceBlocks(code),
       })
-      .select('id, uuid')
+      .select('id, uuid, name')
       .single();
     if (contractError || !newContract) {
       console.error('Failed to create contract:', contractError);
