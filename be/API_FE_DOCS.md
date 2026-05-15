@@ -51,6 +51,7 @@ General error return format:
 #### `GET /contracts`
 - Query params: none
 - Request body: none
+- Response: array of user-owned (non-catalog) contracts. Each item: `uuid, name, source_code, is_catalog, status, hash_sc, gas_estimate, language, reward_per_finding, expired_at, created_at, updated_at, audits[{ uuid, status, kind, created_at }]`.
 
 #### `POST /contracts`
 - Query params: none
@@ -78,6 +79,7 @@ General error return format:
 #### `GET /contracts/:contract_uuid`
 - Query params: none
 - Request body: none
+- Response: the contract (`uuid, name, source_code, owner_id, is_catalog, status, hash_sc, gas_estimate, language, reward_per_finding, expired_at, created_at, updated_at`) joined with nested `audits[{ uuid, status, kind, summary, started_at, completed_at, created_at, ai_findings[{ uuid, severity, title, description, line_start, line_end, confidence, gas_saved, status, reasoning_trace, remediation, attack_trace, created_at }] }]`. Returns 404 if the contract is a catalog contract.
 
 #### `PATCH /contracts/:contract_uuid`
 - Query params: none
@@ -98,6 +100,7 @@ General error return format:
   - `source_code?: object[]`
   - `language?: string`
   - `status?: "draft" | "audited"`
+  - `hash_sc?: string`
   - `expired_at?: string (ISO datetime)`
 
 #### `DELETE /contracts/:contract_uuid`
@@ -143,6 +146,8 @@ General error return format:
   - `language?: string` (default: `solidity`)
   - `expired_at?: string (ISO datetime)`
   - `reward_per_finding?: number` (default: `0`)
+  - `total_reward?: number` (default: `0`)
+- Behavior: after the DB row is inserted, the handler calls the on-chain contract to set `reward_per_finding` for this catalog UUID. If the on-chain call fails, the DB row is rolled back and the request returns `500`.
 
 #### `PATCH /contract_catalog/admin/:contract_uuid`
 - Query params: none
@@ -164,14 +169,17 @@ General error return format:
   - `language?: string`
   - `expired_at?: string (ISO datetime)`
   - `reward_per_finding?: number`
+- Behavior: after the DB row is updated, the handler calls the on-chain contract to update `reward_per_finding` for this catalog UUID (using the new value if provided, otherwise the existing value). If the on-chain call fails, the DB update is rolled back to the previous values and the request returns `500`.
 
 ### 4.3 AI Trigger
 
 All AI endpoints below are **synchronous**. The handler waits for a response from the AI inference service, writes the results to the database, and then responds with the data immediately.
 
+The AI function exposes two sub-routes under the `ai` function: `POST /ai/ai-codegen` and `POST /ai/ai-audit`. Both require auth headers.
+
 General response: status `200` with a payload containing `audit_id`, `contract_id`, and findings/code.
 
-#### `POST /ai-codegen`
+#### `POST /ai/ai-codegen`
 - Query params: none
 - Request body:
 ```json
@@ -183,7 +191,7 @@ General response: status `200` with a payload containing `audit_id`, `contract_i
 - Required fields:
   - `prompt: string`
 - Optional fields:
-  - `contract_id?: string` (UUID of an existing contract owned by the user, not a catalog contract). If not sent, the handler creates a new draft contract.
+  - `contract_id?: string` (UUID of an existing contract owned by the user, not a catalog contract). If not sent, the handler creates a new draft contract named `Generated Contract - YYYY-MM-DD`.
 - Response body (example):
 ```json
 {
@@ -195,28 +203,30 @@ General response: status `200` with a payload containing `audit_id`, `contract_i
       "name": "Reentrancy",
       "reason": "applies ReentrancyGuard...",
       "start_line": 12,
-      "end_line": 20
+      "end_line": 20,
+      "excerpt": "...exact code lines from generated_code..."
     }
   ]
 }
 ```
-- The handler also updates `contracts.source_code` with the generated code and creates `ai_findings` (1 per `mitigations` item).
+- Behavior notes:
+  - The handler updates `contracts.source_code` with the generated code (split into line blocks).
+  - If the contract still has a default name (e.g. the auto-generated `Generated Contract - YYYY-MM-DD`), the handler also renames it to the contract name derived from the generated Solidity (`contract Name`).
+  - Inserts one `ai_findings` row per mitigation. When no valid mitigations are returned, a single placeholder finding `Mitigations unavailable` is inserted.
 
-#### `POST /ai-audit`
+#### `POST /ai/ai-audit`
 - Query params: none
 - Request body:
 ```json
 {
   "code": "pragma solidity ^0.8.0; contract A { ... }",
-  "prompt": "Audit this contract.",
   "contract_id": "<contract_uuid>"
 }
 ```
 - Required fields:
   - `code: string` (raw Solidity source to be audited)
 - Optional fields:
-  - `prompt?: string` (additional instructions; default: "Audit this Solidity contract for security vulnerabilities.")
-  - `contract_id?: string` (UUID of an existing contract owned by the user). If not sent, the handler creates a new draft contract containing the provided `code`.
+  - `contract_id?: string` (UUID of an existing contract owned by the user, not a catalog contract). If not sent, the handler creates a new draft contract named `Audited Contract - YYYY-MM-DD` containing the provided `code`.
 - Response body (example):
 ```json
 {
@@ -232,12 +242,18 @@ General response: status `200` with a payload containing `audit_id`, `contract_i
       "line_start": 42,
       "line_end": 50,
       "confidence": 0.92,
-      "status": "open"
+      "status": "open",
+      "attack_trace": { "...": "..." },
+      "remediation": { "...": "..." }
     }
   ]
 }
 ```
-- Findings are stored in the `ai_findings` table (not `auditor_findings`).
+- Behavior notes:
+  - Re-audit semantics: when `contract_id` is provided, any prior `audits` of `kind=audit` and their `ai_findings` for that contract are deleted, and `contracts.source_code` is replaced with the supplied `code`.
+  - Findings are stored in the `ai_findings` table (not `auditor_findings`).
+  - For findings with severity `critical|high|medium`, an `attack_trace` object is always present (falling back to a stub trace if the model omits it).
+  - `remediation` is either a normalized `{ mode: "line", line, replacement_line }` / `{ mode: "function", function_name, replacement_function }` object, or `{ patch: {...} }`, or `null` if the model produced nothing applicable.
 
 
 ### 4.4 Audits
@@ -346,9 +362,10 @@ All these endpoints require an admin user (`users.is_admin = true`).
 - Query params: none
 - Request body: none
 - Behavior:
-  - Validates `review_status = "submitted"` & catalog contract reference.
-  - Updates `review_status = "approved"`, `decided_at = now()`.
-  - Best-effort upload of JSONL dataset record to 0G Storage; sets `dataset_uri` & `dataset_hash` in the finding.
+  - Validates `review_status = "submitted"`, that the referenced contract is a catalog contract, and that the submitter has a wallet address.
+  - Updates `review_status = "approved"`, `decided_at = now()`, and sets `reward_amount` from the catalog's `reward_per_finding`.
+  - If `reward_per_finding > 0`, calls the on-chain contract to allocate the reward to the submitter. If the on-chain call fails, the DB update is rolled back to `submitted` (with `decided_at = null`, `reward_amount = 0`) and the request returns `500`.
+  - Best-effort upload of a JSONL dataset record to 0G Storage; on success, sets `dataset_uri` & `dataset_hash` on the finding.
 
 #### `POST /admin/auditor-findings/:auditor_finding_uuid/reject`
 - Query params: none
@@ -361,6 +378,11 @@ All these endpoints require an admin user (`users.is_admin = true`).
 - Query params: none
 - Request body: none
 - Response: `{ id, uuid, wallet_address, is_admin, created_at, updated_at }`.
+
+#### `GET /me/profile`
+- Query params: none
+- Request body: none
+- Response: the user record (`uuid, wallet_address, is_admin, created_at, updated_at`) joined with `auditor_findings` authored by the user (`uuid, contract_id, severity, title, description, review_status, submitted_at, decided_at, line_start, line_end, dataset_uri, dataset_hash, reward_amount, created_at, updated_at`).
 
 ### 4.9 Public Stats (Unauthenticated)
 
@@ -376,6 +398,11 @@ All these endpoints require an admin user (`users.is_admin = true`).
   "total_active_auditors": 18
 }
 ```
+- Computation:
+  - `total_reward_distributed`: sum of `auditor_findings.reward_amount` where `review_status = "approved"`.
+  - `total_submitted_findings`: total count of rows in `auditor_findings` (all statuses).
+  - `total_smart_contracts_secured`: total count of rows in `contracts` (user-owned + catalog).
+  - `total_active_auditors`: number of distinct `contributor_id` values across `auditor_findings`.
 - This endpoint is **public**, and does not require `Authorization` or `X-Wallet-Address` headers.
 
 ## 5) AI Flow (Synchronous)
@@ -495,7 +522,7 @@ curl -X POST "${BASE_URL}/contract_catalog/admin" \
   -d '{
     "name": "Target A",
     "source_code": [
-      { "line": 1, "code": "pragma solidity ^0.8.0; contract Target {}" }
+      { "path": "Target.sol", "code": "pragma solidity ^0.8.0; contract Target {}" }
     ],
     "language": "solidity",
     "expired_at": "2026-12-31T23:59:59Z",
@@ -522,9 +549,9 @@ curl -X PATCH "${BASE_URL}/contract_catalog/admin/${CATALOG_CONTRACT_UUID}" \
 
 ### 7.3 AI Trigger
 
-#### POST /ai-codegen
+#### POST /ai/ai-codegen
 ```bash
-curl -X POST "${BASE_URL}/ai-codegen" \
+curl -X POST "${BASE_URL}/ai/ai-codegen" \
   -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
   -H "Content-Type: application/json" \
@@ -534,37 +561,14 @@ curl -X POST "${BASE_URL}/ai-codegen" \
   }'
 ```
 
-#### POST /ai-audit
+#### POST /ai/ai-audit
 ```bash
-curl -X POST "${BASE_URL}/ai-audit" \
+curl -X POST "${BASE_URL}/ai/ai-audit" \
   -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
   -H "Content-Type: application/json" \
   -d '{
     "code": "pragma solidity ^0.8.0; contract Vulnerable { ... }",
-    "prompt": "Audit this contract for security issues.",
-    "contract_id": "'"${CONTRACT_UUID}"'"
-  }'
-```
-
-#### POST /ai-auto-fix
-```bash
-curl -X POST "${BASE_URL}/ai-auto-fix" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
-  -H "Content-Type: application/json" \
-  -d '{
-    "ai_finding_id": "'"${AI_FINDING_UUID}"'"
-  }'
-```
-
-#### POST /ai-gas-opt
-```bash
-curl -X POST "${BASE_URL}/ai-gas-opt" \
-  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
-  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}" \
-  -H "Content-Type: application/json" \
-  -d '{
     "contract_id": "'"${CONTRACT_UUID}"'"
   }'
 ```
@@ -687,6 +691,13 @@ curl -X POST "${BASE_URL}/admin/auditor-findings/${AUDITOR_FINDING_UUID}/reject"
 #### GET /me
 ```bash
 curl -X GET "${BASE_URL}/me" \
+  -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
+  -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
+```
+
+#### GET /me/profile
+```bash
+curl -X GET "${BASE_URL}/me/profile" \
   -H "Authorization: Bearer ${SUPABASE_ANON_KEY}" \
   -H "X-Wallet-Address: ${X_WALLET_ADDRESS}"
 ```
