@@ -9,7 +9,7 @@
 [![Shadcn UI](https://img.shields.io/badge/shadcn%2Fui-000000?logo=shadcnui&logoColor=white)](https://ui.shadcn.com/)
 [![Ethers.js](https://img.shields.io/badge/ethers.js-v6-274291)](https://docs.ethers.org/v6/)
 
-[Backend](../be) · [Training Pipeline](../scripts) · [Smart Contract](../smart-contract)
+[Backend](../be) · [Training Pipeline](../model-training) · [Smart Contract](../smart-contract)
 
 </div>
 
@@ -117,7 +117,7 @@ sequenceDiagram
 - **Framework**: [Next.js 15](https://nextjs.org/) (App Router) for server-side rendering, optimized routing, and SEO.
 - **Styling**: [Tailwind CSS](https://tailwindcss.com/) for rapid, utility-first styling.
 - **Components**: [shadcn/ui](https://ui.shadcn.com/) for accessible, customizable, and unstyled base components.
-- **Web3 Integration**: [ethers.js v6](https://docs.ethers.org/v6/) for interacting with the 0G Galileo Testnet and the `ZVContract`.
+- **Web3 Integration**: [ethers.js v6](https://docs.ethers.org/v6/) for interacting with the 0G Mainnet (default) and the `ZVContract`.
 - **Icons**: Huge Icons for consistent, crisp iconography.
 
 ## 💻 Getting Started Locally
@@ -136,6 +136,13 @@ sequenceDiagram
    NEXT_PUBLIC_SUPABASE_ANON_KEY=...
    NEXT_PUBLIC_API_URL=...
    NEXT_PUBLIC_ZV_CONTRACT_ADDRESS=...
+   # optional: "mainnet" (default) or "testnet"
+   NEXT_PUBLIC_OG_NETWORK=mainnet
+   # optional: override RPC/explorer (recommended for production redundancy)
+   NEXT_PUBLIC_OG_RPC_URL_MAINNET=https://evmrpc.0g.ai
+   NEXT_PUBLIC_OG_EXPLORER_URL_MAINNET=https://chainscan.0g.ai
+   NEXT_PUBLIC_OG_RPC_URL_TESTNET=https://evmrpc-testnet.0g.ai
+   NEXT_PUBLIC_OG_EXPLORER_URL_TESTNET=https://chainscan-galileo.0g.ai
    ```
 4. **Run the development server**:
    ```bash

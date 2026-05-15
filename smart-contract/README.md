@@ -4,15 +4,15 @@
 
 ### `ZVContract` · The On-Chain Settlement Layer
 
-**Pay-per-use AI auditing · Bounty-style rewards for human auditors · All on 0G Galileo**
+**Pay-per-use AI auditing · Bounty-style rewards for human auditors · Built for 0G Mainnet**
 
 [![Solidity](https://img.shields.io/badge/Solidity-0.8.20-363636?logo=solidity&logoColor=white)](https://soliditylang.org)
 [![Hardhat](https://img.shields.io/badge/Hardhat-Toolbox-FFF04D?logo=hardhat&logoColor=black)](https://hardhat.org)
-[![Network](https://img.shields.io/badge/0G_Galileo-Testnet_16602-6c5ce7)](https://0g.ai)
+[![Network](https://img.shields.io/badge/0G-Mainnet_16661-6c5ce7)](https://0g.ai)
 [![Pattern](https://img.shields.io/badge/Pattern-Checks_Effects_Interactions-2ecc71)](https://docs.soliditylang.org/en/latest/security-considerations.html)
 [![Guard](https://img.shields.io/badge/ReentrancyGuard-minimal-blue)]()
 
-[Backend](../be) · [Frontend](../fe) · [Training Pipeline](../scripts)
+[Backend](../be) · [Frontend](../fe) · [Training Pipeline](../model-training)
 
 </div>
 
@@ -24,7 +24,7 @@ ZeroVuln isn't only AI — it's a **bounty economy** for smart-contract security
 
 > Every AI call pays a fee. Every approved human finding earns a reward. Every reward is claimable on-chain. Solvency is enforced by the contract itself.
 
-`ZVContract` is the trust anchor that makes that loop tamper-evident: backend / FE never custody funds, and judges (or anyone) can verify the flow by reading events on 0G Galileo.
+`ZVContract` is the trust anchor that makes that loop tamper-evident: backend / FE never custody funds, and judges (or anyone) can verify the flow by reading events on 0G Mainnet.
 
 ---
 
@@ -91,26 +91,33 @@ graph TD
 
 ## Deploy
 
-> Prerequisites: Node 18+, an EOA funded with 0G Galileo testnet tokens, deployer private key.
+> Prerequisites: Node 18+, an EOA funded with 0G mainnet tokens, deployer private key.
 
 ```bash
 cd smart-contract
-cp .env.example .env            # fill PRIVATE_KEY and (optional) RPC_URL
+cp .env.example .env            # fill PRIVATE_KEY and (optional) RPC_URL_MAINNET / RPC_URL_TESTNET
 npm install
 npm run compile
-npm run deploy:galileo
+npm run deploy                  # default: mainnet
 ```
 
 The script prints the deployed `ZVContract` address. Hardhat loads `.env` via `dotenv` — see [`hardhat.config.js`](./hardhat.config.js).
 
 ### Network
 
-| Setting       | Value                                  |
-| ------------- | -------------------------------------- |
-| Network name  | `galileo` (0G Galileo Testnet)         |
-| Chain ID      | `16602`                                |
-| Default RPC   | `https://evmrpc-testnet.0g.ai`         |
-| Native token  | `0g` (18 decimals, used for fees & rewards) |
+| Setting       | Mainnet                                  | Testnet (Galileo) |
+| ------------- | ---------------------------------------- | ----------------- |
+| Network name  | `mainnet`                                 | `testnet` / `galileo` |
+| Chain ID      | `16661`                                   | `16602` |
+| Default RPC   | `https://evmrpc.0g.ai`                    | `https://evmrpc-testnet.0g.ai` |
+| Explorer      | `https://chainscan.0g.ai`                 | `https://chainscan-galileo.0g.ai` |
+| Native token  | `0G` (18 decimals, used for fees & rewards) | `0G` |
+
+Deploy ke testnet (opsional):
+
+```bash
+npm run deploy:testnet
+```
 
 ---
 
@@ -147,7 +154,7 @@ smart-contract/
 
 - **[`contracts/ZVContract.sol`](./contracts/ZVContract.sol)** — single source of truth for fees, rewards, and events.
 - **[`../be/README.md`](../be/README.md)** — backend integration of fee verification and admin approval flow.
-- **[`../scripts/README.md`](../scripts/README.md)** — how approved findings feed the AI training loop.
+- **[`../model-training/README.md`](../model-training/README.md)** — how approved findings feed the AI training loop.
 
 ---
 

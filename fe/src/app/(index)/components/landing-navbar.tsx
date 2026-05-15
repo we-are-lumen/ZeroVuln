@@ -4,7 +4,7 @@ import { APP_PATH } from "@/shared/constants/app-path";
 import { Wallet03Icon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import Link from "next/link";
-import { ensureOgGalileoChain } from "@/shared/lib/wallet/og-galileo";
+import { ensureOgChain } from "@/shared/lib/wallet/og-chain";
 import { api } from "@/api/client";
 import type { Eip1193Provider } from "@/shared/types/eip1193.type";
 import { useRouter } from "next/navigation";
@@ -41,7 +41,7 @@ const LandingNavbar = () => {
         method: "eth_requestAccounts",
       })) as unknown as string[];
 
-      await ensureOgGalileoChain(ethereum);
+      await ensureOgChain(ethereum);
 
       const wallet = accounts?.[0];
       if (!wallet) throw new Error("Tidak ada akun wallet yang dipilih.");

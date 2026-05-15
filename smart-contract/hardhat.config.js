@@ -1,10 +1,16 @@
 require("dotenv").config();
 require("@nomicfoundation/hardhat-ethers");
 
-const RPC_URL = process.env.RPC_URL || "https://evmrpc-testnet.0g.ai";
+// 0G RPC endpoints (default: mainnet)
+// Ref: https://docs.0g.ai/developer-hub/mainnet/mainnet-overview
+const RPC_URL_MAINNET = process.env.RPC_URL_MAINNET || "https://evmrpc.0g.ai";
+const RPC_URL_TESTNET =
+  process.env.RPC_URL_TESTNET || "https://evmrpc-testnet.0g.ai";
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
+  // Requested: default to mainnet
+  defaultNetwork: "mainnet",
   solidity: {
     version: "0.8.20",
     settings: {
@@ -19,8 +25,20 @@ module.exports = {
     artifacts: "artifacts",
   },
   networks: {
+    // 0G Mainnet
+    mainnet: {
+      url: RPC_URL_MAINNET,
+      chainId: 16661,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+    },
+    // 0G Galileo Testnet (backwards-compatible alias: "galileo")
+    testnet: {
+      url: RPC_URL_TESTNET,
+      chainId: 16602,
+      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+    },
     galileo: {
-      url: RPC_URL,
+      url: RPC_URL_TESTNET,
       chainId: 16602,
       accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
     },

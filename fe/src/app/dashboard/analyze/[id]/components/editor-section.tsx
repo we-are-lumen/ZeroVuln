@@ -20,6 +20,7 @@ import { useState } from "react";
 import { toast } from "sonner";
 import useAnalyzeSmartContract from "../../hooks/use-analyze-smart-contract";
 import { AttackTraceModal } from "./attack-trace-modal";
+import { getOgChain } from "@/shared/lib/wallet/og-chain";
 
 const normalizeContractLabel = (name?: string | null) => {
   const base = (name ?? "Contract").trim();
@@ -36,8 +37,10 @@ const formatHash = (hash?: string | null) => {
   return `${hash.slice(0, 8)}...${hash.slice(-4)}`;
 };
 
-const explorerAddressUrl = (address: string) =>
-  `https://chainscan-galileo.0g.ai/address/${address}`;
+const explorerAddressUrl = (address: string) => {
+  const explorerBase = getOgChain().blockExplorerUrls?.[0];
+  return explorerBase ? `${explorerBase}/address/${address}` : "";
+};
 
 const EditorSection = ({
   finalCode,
@@ -219,7 +222,11 @@ const EditorSection = ({
             size="sm"
             onClick={handleDeploy}
             disabled={isLoading || !finalCode || isDeploying}
-            title={!finalCode ? "Tidak ada code untuk di-deploy" : "Deploy ke OG Galileo"}
+            title={
+              !finalCode
+                ? "Tidak ada code untuk di-deploy"
+                : `Deploy ke ${getOgChain().chainName}`
+            }
           >
             <HugeiconsIcon icon={NeuralNetworkIcon} size={18} strokeWidth={2} />
             <span>{isDeploying ? "Deploying..." : "Deploy"}</span>

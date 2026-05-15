@@ -12,11 +12,12 @@ function requiredEnv(name: string): string {
 }
 
 export function getZvContract() {
-  const rpcUrl = Deno.env.get('ZV_RPC_URL') || 'https://evmrpc-testnet.0g.ai';
+  const rpcUrl = Deno.env.get('ZV_RPC_URL') || 'https://evmrpc.0g.ai';
+  const chainId = Number(Deno.env.get('ZV_CHAIN_ID') || '16661');
   const contractAddress = requiredEnv('ZV_CONTRACT_ADDRESS');
   const pk = requiredEnv('ZV_ADMIN_PRIVATE_KEY');
 
-  const provider = new JsonRpcProvider(rpcUrl, 16602);
+  const provider = new JsonRpcProvider(rpcUrl, chainId);
   const wallet = new Wallet(pk, provider);
   return new Contract(contractAddress, ZV_ABI, wallet);
 }
@@ -58,4 +59,3 @@ export async function allocateRewardFromCatalogOnchain(args: {
   await tx.wait();
   return { txHash: tx.hash };
 }
-

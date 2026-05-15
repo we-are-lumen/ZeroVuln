@@ -5,7 +5,7 @@ import {
   parseEther,
   toUtf8Bytes,
 } from "ethers";
-import { ensureOgGalileoChain } from "./wallet/og-galileo";
+import { ensureOgChain } from "./wallet/og-chain";
 import type { Eip1193Provider } from "@/shared/types/eip1193.type";
 
 const ZV_CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_ZV_CONTRACT_ADDRESS;
@@ -61,7 +61,7 @@ export async function payForFeature(feature: ZVFeature, ref?: string) {
     const ethereum = getEthereum();
     if (!ethereum) throw new Error("Wallet provider tidak ditemukan. Install MetaMask dulu.");
 
-    await ensureOgGalileoChain(ethereum);
+    await ensureOgChain(ethereum);
 
     const provider = new BrowserProvider(ethereum);
     const signer = await provider.getSigner();
@@ -82,7 +82,7 @@ export async function getClaimableRewardWei(walletAddress: string): Promise<bigi
   const ethereum = getEthereum();
   if (!ethereum) throw new Error("Wallet provider tidak ditemukan.");
 
-  await ensureOgGalileoChain(ethereum);
+  await ensureOgChain(ethereum);
 
   const provider = new BrowserProvider(ethereum);
   const zv = new Contract(requireContractAddress(), ZV_ABI, provider);
@@ -94,7 +94,7 @@ export async function claimReward() {
   const ethereum = getEthereum();
   if (!ethereum) throw new Error("Wallet provider tidak ditemukan.");
 
-  await ensureOgGalileoChain(ethereum);
+  await ensureOgChain(ethereum);
 
   const provider = new BrowserProvider(ethereum);
   const signer = await provider.getSigner();
@@ -109,7 +109,7 @@ export async function getContractBalanceWei(): Promise<bigint> {
   const ethereum = getEthereum();
   if (!ethereum) throw new Error("Wallet provider tidak ditemukan.");
 
-  await ensureOgGalileoChain(ethereum);
+  await ensureOgChain(ethereum);
 
   const provider = new BrowserProvider(ethereum);
   const balance = await provider.getBalance(requireContractAddress());
@@ -120,7 +120,7 @@ export async function fundContract(amount0g: string) {
   const ethereum = getEthereum();
   if (!ethereum) throw new Error("Wallet provider tidak ditemukan.");
 
-  await ensureOgGalileoChain(ethereum);
+  await ensureOgChain(ethereum);
 
   const provider = new BrowserProvider(ethereum);
   const signer = await provider.getSigner();
