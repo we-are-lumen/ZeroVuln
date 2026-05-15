@@ -1,21 +1,42 @@
 "use client";
 
 import { useParams } from "next/navigation";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { darcula } from "react-syntax-highlighter/dist/esm/styles/prism";
 
 import { Button } from "@/shared/components/ui/button";
 import CodeSkeleton from "@/app/dashboard/audit/components/skeletons/code-skeleton";
+import { deploySolidityContractFromSource } from "@/shared/lib/solidity/deploy";
 import { CopyIcon, NeuralNetworkIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { toast } from "sonner";
 import useQueryContractDetail from "../../hooks/use-query-contract-detail";
+import contractService from "@/api/services/contracts.service";
+
+const normalizeContractLabel = (name?: string | null) => {
+  const base = (name ?? "Contract").trim();
+  if (!base) return { title: "Contract", ext: ".sol" };
+  if (base.toLowerCase().endsWith(".sol")) {
+    return { title: base.slice(0, -4) || "Contract", ext: ".sol" };
+  }
+  return { title: base, ext: ".sol" };
+};
+
+const formatHash = (hash?: string | null) => {
+  if (!hash) return "";
+  if (hash.length <= 12) return hash;
+  return `${hash.slice(0, 8)}...${hash.slice(-4)}`;
+};
+
+const explorerAddressUrl = (address: string) =>
+  `https://chainscan-galileo.0g.ai/address/${address}`;
 
 const EditorSection = () => {
   const params = useParams();
   const contractId = params.id?.toString() ?? "";
-  const { data, isLoading } = useQueryContractDetail(contractId);
+  const { data, isLoading, refetch } = useQueryContractDetail(contractId);
+  const [isDeploying, setIsDeploying] = useState(false);
 
   const fullCode = useMemo(() => {
     return data?.source_code?.map((lineObj) => lineObj.code).join("\n") ?? "";
@@ -31,22 +52,111 @@ const EditorSection = () => {
     }
   };
 
+  const handleDeploy = async () => {
+    if (!fullCode) return;
+    if (isDeploying) return;
+
+    setIsDeploying(true);
+    try {
+      const deployPromise = deploySolidityContractFromSource(fullCode);
+      toast.promise(deployPromise, {
+        loading: "Compiling & deploying contract...",
+        success: "Deploy berhasil",
+        error: (err: unknown) => (err instanceof Error ? err.message : "Deploy gagal"),
+      });
+
+      const res = await deployPromise;
+
+      toast.success(
+        `Deployed: ${res.address.slice(0, 6)}...${res.address.slice(-4)}`,
+      );
+
+      // Best-effort copy address to clipboard
+      try {
+        await navigator.clipboard.writeText(res.address);
+      } catch {}
+
+      // Update contract status + deployment tx hash
+      if (contractId) {
+        try {
+          await contractService.updateContract(contractId, {
+            status: "deployed",
+            // store deployed contract address
+            hash_sc: res.address ?? null,
+          });
+          refetch();
+        } catch (e) {
+          // best-effort only (deploy already succeeded)
+          console.warn("Failed to sync deployed status:", e);
+        }
+      }
+    } finally {
+      setIsDeploying(false);
+    }
+  };
+
+  const handleCopyHash = async () => {
+    if (!data?.hash_sc) return;
+    try {
+      await navigator.clipboard.writeText(data.hash_sc);
+      toast.success("Contract address copied to clipboard");
+    } catch {
+      toast.error("Failed to copy contract address");
+    }
+  };
+
   return (
     <section className="flex basis-[70%] flex-col overflow-hidden rounded-2xl border border-mist-800 bg-mist-900/50">
       <div className="flex items-center justify-between border-b border-mist-800 bg-mist-950/30 p-3">
         <div className="flex items-center gap-2">
-          <p className="font-mono text-sm font-medium text-zinc-400">
-            {data?.name}
-          </p>
+          {(() => {
+            const { title, ext } = normalizeContractLabel(data?.name);
+            return (
+              <>
+                <p className="font-mono text-sm font-medium text-zinc-400">
+                  {title}
+                </p>
+                <span className="rounded border border-mist-700 bg-mist-950/40 px-2 py-0.5 font-mono text-[10px] text-mist-400">
+                  {ext}
+                </span>
+                {data?.status === "deployed" && (
+                  <a
+                    href={data?.hash_sc ? explorerAddressUrl(data.hash_sc) : undefined}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="rounded border border-emerald-500/30 bg-emerald-500/10 px-2 py-0.5 font-mono text-[10px] font-medium text-emerald-300 hover:bg-emerald-500/15"
+                    title="Open in explorer"
+                  >
+                    deployed
+                  </a>
+                )}
+                {data?.hash_sc && (
+                  <button
+                    type="button"
+                    onClick={handleCopyHash}
+                    className="rounded border border-mist-700 bg-mist-950/40 px-2 py-0.5 font-mono text-[10px] text-mist-400 hover:text-mist-200"
+                    title="Copy contract address"
+                  >
+                    {formatHash(data.hash_sc)}
+                  </button>
+                )}
+              </>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-2">
           <Button size="icon-sm" variant="outline" onClick={handleCopy}>
             <HugeiconsIcon icon={CopyIcon} size={18} strokeWidth={2} />
           </Button>
 
-          <Button size="sm">
+          <Button
+            size="sm"
+            onClick={handleDeploy}
+            disabled={isLoading || !fullCode || isDeploying}
+            title={!fullCode ? "Tidak ada code untuk di-deploy" : "Deploy ke OG Galileo"}
+          >
             <HugeiconsIcon icon={NeuralNetworkIcon} size={18} strokeWidth={2} />
-            <span>Deploy</span>
+            <span>{isDeploying ? "Deploying..." : "Deploy"}</span>
           </Button>
         </div>
       </div>

@@ -69,31 +69,296 @@ const AiFindingsSection = ({
     return relevantLines.map((l) => l.code).join("\n");
   };
 
-  const handleApply = (
-    lineStart: number,
-    lineEnd: number,
-    suggestedCode?: string,
-  ) => {
-    if (typeof suggestedCode !== "string") {
-      toast.error("No suggested fix data available for this finding.");
-      return;
+  type PatchOp = "replace" | "insert_before" | "insert_after" | "delete";
+  type FindingPatch = {
+    op: PatchOp;
+    start_line: number;
+    end_line: number;
+    replacement?: string;
+  };
+
+  type FindingRemediation =
+    | { mode: "line"; line: number; replacement_line: string }
+    | {
+        mode: "function";
+        function_name: string;
+        replacement_function: string;
+      };
+
+  const escapeRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  const indexToLine = (s: string, index: number) =>
+    s.slice(0, index).split("\n").length;
+
+  const findFunctionRange = (
+    code: string,
+    functionName: string,
+    nearLine: number,
+  ): { startIndex: number; endIndexExclusive: number; startLine: number } | null => {
+    const re = new RegExp(`\\bfunction\\s+${escapeRegExp(functionName)}\\b`, "g");
+    const matches: number[] = [];
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(code))) matches.push(m.index);
+    if (matches.length === 0) return null;
+
+    const best = matches
+      .map((idx) => ({ idx, line: indexToLine(code, idx) }))
+      .sort((a, b) => Math.abs(a.line - nearLine) - Math.abs(b.line - nearLine))[0];
+
+    const lineStartIndex = code.lastIndexOf("\n", best.idx - 1) + 1;
+    const braceStart = code.indexOf("{", best.idx);
+    if (braceStart === -1) return null;
+
+    // Ignore function declarations without body (end with ';' before '{')
+    const semi = code.indexOf(";", best.idx);
+    if (semi !== -1 && semi < braceStart) return null;
+
+    let depth = 0;
+    let endBrace = -1;
+    for (let i = braceStart; i < code.length; i++) {
+      const ch = code[i];
+      if (ch === "{") depth++;
+      else if (ch === "}") {
+        depth--;
+        if (depth === 0) {
+          endBrace = i;
+          break;
+        }
+      }
     }
+    if (endBrace === -1) return null;
+
+    const nextNewline = code.indexOf("\n", endBrace + 1);
+    const endIndexExclusive = nextNewline === -1 ? code.length : nextNewline + 1;
+
+    return {
+      startIndex: lineStartIndex,
+      endIndexExclusive,
+      startLine: indexToLine(code, lineStartIndex),
+    };
+  };
+
+  const reindentBlock = (block: string, targetIndent: string) => {
+    const rawLines = block.replace(/\r\n/g, "\n").split("\n");
+    // trim outer empty lines
+    while (rawLines.length && rawLines[0].trim() === "") rawLines.shift();
+    while (rawLines.length && rawLines[rawLines.length - 1].trim() === "")
+      rawLines.pop();
+
+    // compute minimal indent from non-empty lines
+    const indents = rawLines
+      .filter((l) => l.trim() !== "")
+      .map((l) => (l.match(/^\s*/) || [""])[0]);
+    const minIndent =
+      indents.length === 0
+        ? ""
+        : indents.reduce((min, cur) => (cur.length < min.length ? cur : min));
+
+    return rawLines
+      .map((line) => {
+        if (line.trim() === "") return "";
+        const stripped = line.startsWith(minIndent)
+          ? line.slice(minIndent.length)
+          : line.trimStart();
+        return targetIndent + stripped;
+      })
+      .join("\n");
+  };
+
+  const applyPatch = (patch: FindingPatch) => {
     if (!finalCode) return;
 
     const lines = finalCode.split("\n");
-    const startIndex = lineStart - 1;
-    const deleteCount = lineEnd - lineStart + 1;
+    const startIndex = patch.start_line - 1;
+    const endIndex = patch.end_line - 1;
 
-    if (suggestedCode === "") {
-      lines.splice(startIndex, deleteCount);
-    } else {
-      lines.splice(startIndex, deleteCount, suggestedCode);
+    if (startIndex < 0 || endIndex < startIndex || endIndex >= lines.length) {
+      toast.warning("Auto-apply unavailable: patch line range is out of bounds.");
+      return;
     }
 
-    setFinalCode(lines.join("\n"));
-    toast.success(
-      suggestedCode === "" ? "Lines removed!" : "Fix applied successfully!",
-    );
+    // Extra guardrails (penting untuk findings lama yang mungkin masih punya patch salah).
+    if (patch.op === "delete" && patch.end_line !== patch.start_line) {
+      toast.warning(
+        "Auto-apply unavailable: unsafe delete patch (multi-line). Please re-run Analyze.",
+      );
+      return;
+    }
+    if (
+      (patch.op === "insert_before" || patch.op === "insert_after") &&
+      patch.end_line !== patch.start_line
+    ) {
+      toast.warning(
+        "Auto-apply unavailable: invalid insert patch range. Please re-run Analyze.",
+      );
+      return;
+    }
+
+    const replacementLines =
+      typeof patch.replacement === "string" && patch.replacement.length > 0
+        ? patch.replacement.split("\n")
+        : [];
+
+    if (patch.op === "delete") {
+      lines.splice(startIndex, endIndex - startIndex + 1);
+      setFinalCode(lines.join("\n"));
+      toast.success("Fix applied successfully!");
+      return;
+    }
+
+    if (patch.op === "replace") {
+      if (replacementLines.length === 0) {
+        toast.warning(
+          "Auto-apply unavailable: empty replacement for a replace patch. Please re-run Analyze.",
+        );
+        return;
+      }
+      const expected = patch.end_line - patch.start_line + 1;
+      if (replacementLines.length !== expected) {
+        toast.warning(
+          "Auto-apply unavailable: replacement block does not match the patch range. Please re-run Analyze.",
+        );
+        return;
+      }
+
+      const originalBlock = lines.slice(startIndex, endIndex + 1).join("\n");
+      const countBraces = (s: string) => ({
+        open: (s.match(/\{/g) || []).length,
+        close: (s.match(/\}/g) || []).length,
+      });
+      const o = countBraces(originalBlock);
+      const r = countBraces(replacementLines.join("\n"));
+      if (o.open !== r.open || o.close !== r.close) {
+        toast.warning(
+          "Auto-apply unavailable: replacement changes brace structure. Please re-run Analyze.",
+        );
+        return;
+      }
+
+      lines.splice(startIndex, endIndex - startIndex + 1, ...replacementLines);
+      setFinalCode(lines.join("\n"));
+      toast.success("Fix applied successfully!");
+      return;
+    }
+
+    if (patch.op === "insert_before") {
+      if (replacementLines.length === 0) {
+        toast.warning(
+          "Auto-apply unavailable: empty replacement for an insert patch. Please re-run Analyze.",
+        );
+        return;
+      }
+      lines.splice(startIndex, 0, ...replacementLines);
+      setFinalCode(lines.join("\n"));
+      toast.success("Fix applied successfully!");
+      return;
+    }
+
+    if (patch.op === "insert_after") {
+      if (replacementLines.length === 0) {
+        toast.warning(
+          "Auto-apply unavailable: empty replacement for an insert patch. Please re-run Analyze.",
+        );
+        return;
+      }
+      lines.splice(endIndex + 1, 0, ...replacementLines);
+      setFinalCode(lines.join("\n"));
+      toast.success("Fix applied successfully!");
+      return;
+    }
+  };
+
+  const applyRemediation = (
+    remediation: FindingRemediation,
+    findingLineStart: number,
+  ) => {
+    if (!finalCode) return;
+
+    if (remediation.mode === "line") {
+      const line = remediation.line;
+      const replacement = remediation.replacement_line ?? "";
+      const lines = finalCode.split("\n");
+      const idx = line - 1;
+      if (idx < 0 || idx >= lines.length) {
+        toast.warning("Auto-apply unavailable: remediation line is out of bounds.");
+        return;
+      }
+
+      if (replacement === "") {
+        lines.splice(idx, 1);
+      } else {
+        const indent = (lines[idx].match(/^\s*/) || [""])[0];
+        const newLine =
+          /^\s/.test(replacement) || replacement === ""
+            ? replacement
+            : indent + replacement;
+        lines[idx] = newLine;
+      }
+      setFinalCode(lines.join("\n"));
+      toast.success("Fix applied successfully!");
+      return;
+    }
+
+    const fnName = remediation.function_name;
+    const replacementFn = remediation.replacement_function;
+    if (!fnName || !replacementFn) {
+      toast.warning("Auto-apply unavailable: missing function remediation data.");
+      return;
+    }
+
+    const range = findFunctionRange(finalCode, fnName, findingLineStart);
+    if (!range) {
+      toast.warning("Auto-apply unavailable: function not found in current code.");
+      return;
+    }
+
+    const originalFirstLine = finalCode
+      .slice(range.startIndex, range.endIndexExclusive)
+      .split("\n")[0];
+    const targetIndent = (originalFirstLine.match(/^\s*/) || [""])[0];
+
+    // Basic sanity: replacement function braces must be balanced.
+    const count = (s: string) => ({
+      open: (s.match(/\{/g) || []).length,
+      close: (s.match(/\}/g) || []).length,
+    });
+    const r = count(replacementFn);
+    if (r.open === 0 || r.open !== r.close) {
+      toast.warning(
+        "Auto-apply unavailable: replacement function has invalid brace structure.",
+      );
+      return;
+    }
+
+    const reindentedFn = reindentBlock(replacementFn, targetIndent);
+
+    const nextCode =
+      finalCode.slice(0, range.startIndex) +
+      reindentedFn.trimEnd() +
+      "\n" +
+      finalCode.slice(range.endIndexExclusive);
+
+    setFinalCode(nextCode);
+    toast.success("Fix applied successfully!");
+  };
+
+  const handleApply = (opts: {
+    remediation?: FindingRemediation;
+    patch?: FindingPatch;
+    findingLineStart: number;
+  }) => {
+    if (opts.remediation) {
+      applyRemediation(opts.remediation, opts.findingLineStart);
+      return;
+    }
+    if (opts.patch) {
+      applyPatch(opts.patch);
+      return;
+    }
+
+      toast.warning(
+        "Auto-apply unavailable: no remediation data available. Please re-run Analyze.",
+      );
   };
 
   const displayedFindings = useMemo(() => {
@@ -110,12 +375,51 @@ const AiFindingsSection = ({
         line_start,
         line_end,
         reasoning_trace,
+        remediation,
         confidence,
       }) => {
         const snippet = getSnippet(line_start, line_end);
         const isMultiLine = line_end !== line_start;
-        const suggestedCode = (reasoning_trace as any)?.vulnerability
-          .suggested_code;
+        const remediationObj = remediation as any;
+        const remediationMode = remediationObj?.mode as
+          | FindingRemediation["mode"]
+          | undefined;
+        const remediationData: FindingRemediation | undefined =
+          remediationMode === "line" || remediationMode === "function"
+            ? (remediationObj as FindingRemediation)
+            : undefined;
+
+        const patch = remediationObj?.patch as FindingPatch | undefined;
+        const suggestedCode =
+          remediationObj?.suggested_code ??
+          (reasoning_trace as any)?.vulnerability?.suggested_code;
+
+        const label =
+          remediationData?.mode === "line"
+            ? `line ${remediationData.line}`
+            : remediationData?.mode === "function"
+              ? `function ${remediationData.function_name}`
+              : patch
+                ? `${patch.op} lines ${patch.start_line}-${patch.end_line}`
+                : null;
+
+        const displayStart =
+          remediationData?.mode === "line"
+            ? remediationData.line
+            : remediationData?.mode === "function"
+              ? line_start
+              : patch?.start_line ?? line_start;
+
+        const displayBody =
+          remediationData?.mode === "line"
+            ? remediationData.replacement_line
+            : remediationData?.mode === "function"
+              ? remediationData.replacement_function
+              : patch?.op === "delete"
+                ? getSnippet(patch.start_line, patch.end_line)
+                : patch?.replacement ?? suggestedCode ?? "";
+
+        const canApply = !!remediationData || !!patch;
 
         return (
           <div
@@ -177,6 +481,11 @@ const AiFindingsSection = ({
                 <h5 className="line-clamp-1 text-xs font-medium">
                   Suggested Fix
                 </h5>
+                {label && (
+                  <span className="ml-1 text-[10px] font-medium text-mist-400">
+                    ({label})
+                  </span>
+                )}
               </div>
 
               <div className="border border-primary">
@@ -184,7 +493,7 @@ const AiFindingsSection = ({
                   language="solidity"
                   style={darcula}
                   showLineNumbers
-                  startingLineNumber={line_start}
+                  startingLineNumber={displayStart}
                   customStyle={{
                     margin: 0,
                     padding: "0.5rem",
@@ -192,7 +501,7 @@ const AiFindingsSection = ({
                     background: "rgba(0,0,0,0.3)",
                   }}
                 >
-                  {suggestedCode}
+                  {displayBody}
                 </SyntaxHighlighter>
               </div>
             </div>
@@ -207,12 +516,22 @@ const AiFindingsSection = ({
               </Button>
               <Button
                 size="sm"
+                disabled={!canApply}
                 onClick={() => {
                   setChosenFindings((prev) => [...prev, uuid]);
-                  handleApply(line_start, line_end, suggestedCode);
+                  handleApply({
+                    remediation: remediationData,
+                    patch,
+                    findingLineStart: line_start,
+                  });
                 }}
+                title={
+                  canApply
+                    ? "Apply fix"
+                    : "Auto-apply needs remediation data. Please re-run Analyze."
+                }
               >
-                {suggestedCode === "" ? "Remove Lines" : "Apply Fix"}
+                Apply Fix
               </Button>
             </div>
           </div>

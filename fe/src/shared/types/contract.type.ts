@@ -20,6 +20,16 @@ export interface AttackTraceMetadata {
     confidence: number;
     blockNumber: number;
     vulnerability: string;
+    steps?: AttackTraceStep[];
+}
+
+export interface AttackTraceStep {
+    step: number;
+    title: string;
+    description: string;
+    from?: string;
+    to?: string;
+    action?: string;
 }
 export interface AttackTrace {
     traceId: string;
@@ -46,7 +56,7 @@ export type AiFinding = {
     created_at: string;
     gas_saved: number | null;
     confidence: number | null;
-    remediation: string | null;
+    remediation: unknown | null;
     reasoning_trace: {
         mitigation: AiMitigation;
     };
@@ -67,6 +77,7 @@ export type Contract = {
     language: string
     name: string
     status: string
+    hash_sc?: string | null
     gas_eslimate: number | null
     reward_per_finding: number
     is_catalog: boolean
