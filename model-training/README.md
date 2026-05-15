@@ -89,7 +89,7 @@ graph TD
 ## Install
 
 ```bash
-cd scripts
+cd model-training
 
 # 1) TypeScript orchestrator
 npm install
@@ -110,7 +110,7 @@ pip install -r requirements.txt
 
 ## Environment
 
-Create `scripts/.env` (gitignored) with at minimum:
+Create `model-training/.env` (gitignored) with at minimum:
 
 ```env
 # --- Supabase (required) ---
@@ -261,7 +261,7 @@ These are passed through to `0g-compute-cli fine-tuning create-task --config-pat
 After a successful run, expect this layout:
 
 ```
-scripts/
+model-training/
 ├── datasets/
 │   └── from_0g.jsonl                                # aggregated training data
 └── fine_tuned_model/
@@ -284,7 +284,7 @@ The `merged/` folder is what gets uploaded to `https://huggingface.co/<HF_REPO_I
 
 | Symptom                                                        | Likely Cause / Fix                                                                                       |
 | -------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| `Missing env var: SUPABASE_URL`                                | `.env` not loaded — confirm `scripts/.env` exists and `dotenv/config` import is reachable                |
+| `Missing env var: SUPABASE_URL`                                | `.env` not loaded — confirm `model-training/.env` exists and `dotenv/config` import is reachable                |
 | `0G download failed for <hash>`                                | Storage indexer rejected the root hash. Retry with `--no-verify` to bypass merkle check (debug only)     |
 | `[0g-cli] create-task failed`                                  | Account not funded or wrong provider. Re-check `deposit` + `transfer-fund` and `--provider` value        |
 | `[0g-cli] timed out waiting for Delivered`                     | Provider is slow. Increase `--poll-timeout-ms`; some providers take >1h depending on dataset size        |

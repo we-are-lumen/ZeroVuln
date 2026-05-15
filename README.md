@@ -119,7 +119,7 @@ ZeroVuln is built as a complete, end-to-end decentralized ecosystem. Below is th
 | **🎨 [Frontend (fe/)](./fe)** | The decentralized dashboard for users to audit contracts and for human auditors to review vulnerabilities. | Next.js 15, Tailwind, ethers.js | [Read `fe/README.md`](./fe/README.md) |
 | **⚙️ [Backend (be/)](./be)** | Serverless infrastructure handling auth, DB state, and API endpoints. | Deno, Supabase Edge Functions | [Read `be/README.md`](./be/README.md) |
 | **🔗 [Smart Contract (smart-contract/)](./smart-contract)** | The on-chain settlement layer on 0G Mainnet (default). Handles pay-per-use fees and auditor bounties. | Solidity, Hardhat | [Read `smart-contract/README.md`](./smart-contract/README.md) |
-| **🤖 [Training Pipeline (scripts/)](./model-training)** | Orchestrates verified findings from 0G Storage → 0G Compute fine-tuning → HuggingFace. | Node.js, Python, 0G CLI | [Read `scripts/README.md`](./model-training/README.md) |
+| **🤖 [Training Pipeline (model-training/)](./model-training)** | Orchestrates verified findings from 0G Storage → 0G Compute fine-tuning → HuggingFace. | Node.js, Python, 0G CLI | [Read `model-training/README.md`](./model-training/README.md) |
 | **🧠 [AI API (ai/)](./ai)** | Production-ready FastAPI inference engine serving our fine-tuned smart contract security models. | Python, FastAPI, HuggingFace | [Read `ai/README.md`](./ai/README.md) |
 
 

@@ -19,16 +19,8 @@ Deno.serve(async (req: Request) => {
     return handleGetContract(auth, id);
   }
 
-  if (req.method === 'POST' && !id) {
-    return handleCreateContract(req, auth);
-  }
-
   if (req.method === 'PATCH' && id) {
     return handleUpdateContract(req, auth, id);
-  }
-
-  if (req.method === 'DELETE' && id) {
-    return handleDeleteContract(auth, id);
   }
 
   return badRequest('Method not allowed');
@@ -77,33 +69,6 @@ async function handleGetContract(auth: { user_id: number; is_admin: boolean }, i
   return json(data);
 }
 
-async function handleCreateContract(req: Request, auth: { user_id: number }) {
-  const body = await req.json().catch(() => null);
-  if (!body) return badRequest('Invalid JSON body');
-
-  const name = body.name || `Contract ${new Date().toISOString().split('T')[0]}`;
-  const sourceCode = normalizeSourceCode(body.source_code);
-  if (!sourceCode) return badRequest('source_code must be an array of JSON objects');
-  const language = body.language || 'solidity';
-  const expiredAt = typeof body.expired_at === 'string' ? body.expired_at : null;
-
-  const { data, error } = await supabase
-    .from('contracts')
-    .insert({
-      owner_id: auth.user_id,
-      is_catalog: false,
-      name,
-      source_code: sourceCode,
-      language,
-      expired_at: expiredAt,
-    })
-    .select()
-    .single();
-
-  if (error) return serverError(error.message);
-  return json(data, 201);
-}
-
 async function handleUpdateContract(req: Request, auth: { user_id: number }, id: string) {
   const { data: existing, error: fetchError } = await supabase
     .from('contracts')
@@ -142,19 +107,3 @@ async function handleUpdateContract(req: Request, auth: { user_id: number }, id:
   return json(data);
 }
 
-async function handleDeleteContract(auth: { user_id: number; is_admin: boolean }, id: string) {
-  const { data: existing, error: fetchError } = await supabase
-    .from('contracts')
-    .select('owner_id, is_catalog')
-    .eq('uuid', id)
-    .single();
-
-  if (fetchError || !existing) return notFound('Contract not found');
-  if (existing.owner_id !== auth.user_id && !auth.is_admin) return forbidden();
-  if (existing.is_catalog) return badRequest('Cannot delete catalog contract via this endpoint');
-
-  const { error } = await supabase.from('contracts').delete().eq('uuid', id);
-  if (error) return serverError(error.message);
-
-  return json({ success: true });
-}
