@@ -20,7 +20,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/components/ui/dialog";
-import { ensureOgGalileoChain } from "@/shared/lib/wallet/og-galileo";
 import { Eip1193Provider } from "@/shared/types/eip1193.type";
 import {
   AiBrain04Icon,
@@ -53,6 +52,7 @@ import LandingNavbar from "./components/landing-navbar";
 import StatItem from "./components/stat-item";
 import useQueryPublicStats from "./hooks/use-query-public-stats";
 import { Element } from "react-scroll";
+import { ensureOgGalileoChain } from "@/shared/lib/wallet/og-galileo";
 
 function getEthereum(): Eip1193Provider | undefined {
   if (typeof window === "undefined") return undefined;
