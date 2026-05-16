@@ -9,6 +9,7 @@ import { api } from "@/api/client";
 import type { Eip1193Provider } from "@/shared/types/eip1193.type";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import { Link as ScrollTo } from "react-scroll";
 
 function getEthereum(): Eip1193Provider | undefined {
   if (typeof window === "undefined") return undefined;
@@ -77,30 +78,34 @@ const LandingNavbar = () => {
       </Link>
 
       <div className="space-x-2 text-mist-400">
-        <Link
-          href="/"
-          className="px-4 py-2 transition-all duration-300 hover:text-white"
+        <ScrollTo
+          smooth
+          to="benefits"
+          className="cursor-pointer px-4 py-2 transition-all duration-300 hover:text-white"
         >
           Benefits
-        </Link>
-        <Link
-          href="/"
-          className="px-4 py-2 transition-all duration-300 hover:text-white"
+        </ScrollTo>
+        <ScrollTo
+          smooth
+          to="spesifications"
+          className="cursor-pointer px-4 py-2 transition-all duration-300 hover:text-white"
         >
           Specifications
-        </Link>
-        <Link
-          href="/"
-          className="px-4 py-2 transition-all duration-300 hover:text-white"
+        </ScrollTo>
+        <ScrollTo
+          smooth
+          to="how-to"
+          className="cursor-pointer px-4 py-2 transition-all duration-300 hover:text-white"
         >
           How-to
-        </Link>
-        <Link
-          href="/"
-          className="px-4 py-2 transition-all duration-300 hover:text-white"
+        </ScrollTo>
+        <ScrollTo
+          smooth
+          to="contribute"
+          className="cursor-pointer px-4 py-2 transition-all duration-300 hover:text-white"
         >
-          Contact Us
-        </Link>
+          Contribute
+        </ScrollTo>
       </div>
 
       <Button onClick={handleConnect} disabled={isConnecting}>
