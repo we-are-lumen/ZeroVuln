@@ -53,6 +53,8 @@ import StatItem from "./components/stat-item";
 import useQueryPublicStats from "./hooks/use-query-public-stats";
 import { Element } from "react-scroll";
 import { ensureOgGalileoChain } from "@/shared/lib/wallet/og-galileo";
+import { APP_PATH } from "@/shared/constants/app-path";
+import { toast } from "sonner";
 
 function getEthereum(): Eip1193Provider | undefined {
   if (typeof window === "undefined") return undefined;
@@ -105,7 +107,7 @@ export default function Home() {
   async function handleConnect() {
     const ethereum = getEthereum();
     if (!ethereum) {
-      alert("Wallet provider tidak ditemukan. Install MetaMask dulu.");
+      toast.error("Wallet provider not found. Please install MetaMask first.");
       return;
     }
 
@@ -127,18 +129,16 @@ export default function Home() {
       } catch (e: unknown) {
         console.error(e);
         localStorage.removeItem("walletAddress");
-        alert(
-          "Connect wallet berhasil, tapi gagal handshake ke backend (/me). Pastikan backend jalan dan env FE sudah benar.",
-        );
+        toast.error("Something went wrong");
         return;
       }
 
-      router.push("/dashboard");
+      router.push(APP_PATH.dashboard.index);
     } catch (err: unknown) {
       console.error(err);
       const message =
-        err instanceof Error ? err.message : "Gagal connect wallet.";
-      alert(message);
+        err instanceof Error ? err.message : "Failed to connect to wallet.";
+      toast.error(message);
     } finally {
       setIsConnecting(false);
     }
@@ -146,7 +146,10 @@ export default function Home() {
 
   return (
     <main>
-      <LandingNavbar />
+      <LandingNavbar
+        handleConnect={handleConnect}
+        isConnecting={isConnecting}
+      />
 
       <Dialog open={isDialogOpen} onOpenChange={setisDialogOpen}>
         <form>
