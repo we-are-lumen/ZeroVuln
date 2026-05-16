@@ -1,5 +1,3 @@
-"use client";
-
 import type { Eip1193Provider } from "@/shared/types/eip1193.type";
 
 export const OG_GALILEO_CHAIN = {
