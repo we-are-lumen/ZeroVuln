@@ -1,5 +1,5 @@
 import { resolveUser, unauthorized, notFound, badRequest, serverError, json, supabase, corsPreflight } from '../_shared/supabase.ts';
-import { submitComputeJob } from '../_shared/og-storage.ts';
+import { ogChatCompletion } from '../_shared/og-compute.ts';
 
 const AI_CODEAUDIT_SYSTEM_PROMPT_V2 = `
 Role: You are a Senior Smart Contract Auditor.
@@ -138,6 +138,15 @@ Deno.serve(async (req: Request) => {
   }
   if (segment === 'ai-audit') {
     return handleAudit(req, auth, body);
+  }
+  // 0G Compute Network variants — same business logic as the default endpoints,
+  // but inference is routed through the 0G Serving Broker against the configured
+  // 0G chatbot provider (default model 0GM-1.0-35B-A3B). See _shared/og-compute.ts.
+  if (segment === 'ai-codegen-0g') {
+    return handleCodegenOg(req, auth, body);
+  }
+  if (segment === 'ai-audit-0g') {
+    return handleAuditOg(req, auth, body);
   }
 
   return notFound('Endpoint not found');
@@ -923,4 +932,341 @@ function parseAuditResponse(aiData: unknown): { code_fixed: string; vulnerabilit
     return { code_fixed, vulnerabilities };
   }
   return { code_fixed: '', vulnerabilities: [] };
+}
+
+// ---------------------------------------------------------------------------
+// 0G Compute variants (ai-codegen-0g / ai-audit-0g)
+// ---------------------------------------------------------------------------
+// These mirror handleCodegen / handleAudit but route inference through the
+// 0G Compute Network (via the 0G Serving Broker SDK) instead of the sumopod
+// gateway. The targeted model is `0GM-1.0-35B-A3B` (overridable via the
+// `OG_COMPUTE_MODEL` env var; provider overridable via `OG_COMPUTE_PROVIDER`).
+
+async function handleCodegenOg(
+  _req: Request,
+  auth: { user_id: number },
+  body: Record<string, unknown>,
+) {
+  const { prompt, contract_id } = body;
+
+  if (!prompt || typeof prompt !== 'string') {
+    return badRequest('prompt is required');
+  }
+
+  let contractRowId: number;
+  let contractUuid: string;
+  let existingName: string | null = null;
+  if (contract_id && typeof contract_id === 'string') {
+    const { data: existing, error: existingError } = await supabase
+      .from('contracts')
+      .select('id, uuid, owner_id, is_catalog, name')
+      .eq('uuid', contract_id)
+      .single();
+    if (existingError || !existing) return notFound('Contract not found');
+    if (existing.owner_id !== auth.user_id) return badRequest('Contract does not belong to user');
+    if (existing.is_catalog) return badRequest('Cannot codegen into catalog contract');
+    contractRowId = existing.id;
+    contractUuid = existing.uuid;
+    existingName = typeof existing.name === 'string' ? existing.name : null;
+  } else {
+    const { data: newContract, error: contractError } = await supabase
+      .from('contracts')
+      .insert({
+        owner_id: auth.user_id,
+        is_catalog: false,
+        name: `Generated Contract - ${new Date().toISOString().slice(0, 10)}`,
+        language: 'solidity',
+        status: 'draft',
+        source_code: [],
+      })
+      .select('id, uuid, name')
+      .single();
+
+    if (contractError || !newContract) {
+      console.error('Failed to create contract:', contractError);
+      return serverError('Failed to create contract');
+    }
+    contractRowId = newContract.id;
+    contractUuid = newContract.uuid;
+    existingName = typeof newContract.name === 'string' ? newContract.name : null;
+  }
+
+  const { data: audit, error: auditError } = await supabase
+    .from('audits')
+    .insert({
+      contract_id: contractRowId,
+      kind: 'codegen',
+      status: 'pending',
+    })
+    .select('id, uuid')
+    .single();
+
+  if (auditError || !audit) return serverError('Failed to create audit record');
+
+  try {
+    const aiData = await ogChatCompletion({
+      prompt,
+      system_prompt: AI_CODEGEN_SYSTEM_PROMPT,
+      max_tokens: 4096,
+      temperature: 0.4,
+    });
+
+    const parsed = parseAIResponse(aiData);
+    const generatedCode = parsed.code || '';
+    const codeLines = generatedCode ? generatedCode.split(/\r?\n/) : [];
+    const mitigations = normalizeCodegenMitigations(parsed.mitigations, codeLines);
+    const suggestedName =
+      parsed.contract_name ||
+      (generatedCode ? extractPrimaryContractName(generatedCode) : null);
+
+    if (mitigations.length > 0) {
+      const findings = mitigations.map((mitigation) => ({
+        audit_id: audit.id,
+        severity: 'info',
+        title: mitigation.name || 'Vulnerability Mitigation',
+        description: mitigation.reason || '',
+        line_start: mitigation.start_line ?? null,
+        line_end: mitigation.end_line ?? null,
+        status: 'open',
+        reasoning_trace: { mitigation },
+      }));
+      const { error: findingError } = await supabase.from('ai_findings').insert(findings);
+      if (findingError) console.error('Failed to insert ai_findings:', findingError);
+    } else {
+      const { error: findingError } = await supabase
+        .from('ai_findings')
+        .insert({
+          audit_id: audit.id,
+          severity: 'info',
+          title: 'Mitigations unavailable',
+          description:
+            'AI did not return valid vulnerability mitigations for this generated contract.',
+          status: 'open',
+        });
+      if (findingError) console.error('Failed to insert ai_finding:', findingError);
+    }
+
+    if (generatedCode) {
+      const sourceBlocks = codeStringToSourceBlocks(generatedCode);
+      const shouldUpdateName =
+        !!suggestedName && (existingName === null || isDefaultGeneratedName(existingName));
+      const { error: updateError } = await supabase
+        .from('contracts')
+        .update({
+          source_code: sourceBlocks,
+          ...(shouldUpdateName ? { name: suggestedName } : {}),
+        })
+        .eq('id', contractRowId);
+      if (updateError) console.error('Failed to update contract:', updateError);
+    }
+
+    await supabase
+      .from('audits')
+      .update({
+        status: 'succeeded',
+        completed_at: new Date().toISOString(),
+      })
+      .eq('id', audit.id);
+
+    return json({
+      contract_id: contractUuid,
+      audit_id: audit.uuid,
+      generated_code: generatedCode,
+      mitigations,
+      backend: '0g-compute',
+    }, 200);
+  } catch (e) {
+    console.error('0G codegen job failed:', e);
+    await supabase.from('audits').update({ status: 'failed' }).eq('id', audit.id);
+    return serverError(`Codegen (0G) failed: ${String(e)}`);
+  }
+}
+
+async function handleAuditOg(
+  _req: Request,
+  auth: { user_id: number },
+  body: Record<string, unknown>,
+) {
+  const { code, contract_id } = body;
+
+  if (!code || typeof code !== 'string') {
+    return badRequest('code (raw smart contract string) is required');
+  }
+
+  let contractRowId: number;
+  let contractUuid: string;
+  let existingName: string | null = null;
+  if (contract_id && typeof contract_id === 'string') {
+    const { data: existing, error: existingError } = await supabase
+      .from('contracts')
+      .select('id, uuid, owner_id, is_catalog, name')
+      .eq('uuid', contract_id)
+      .single();
+    if (existingError || !existing) return notFound('Contract not found');
+    if (existing.owner_id !== auth.user_id) return badRequest('Contract does not belong to user');
+    if (existing.is_catalog) return badRequest('Cannot audit catalog contract via this endpoint');
+    contractRowId = existing.id;
+    contractUuid = existing.uuid;
+    existingName = typeof existing.name === 'string' ? existing.name : null;
+
+    const { data: priorAudits, error: priorAuditsError } = await supabase
+      .from('audits')
+      .select('id')
+      .eq('contract_id', contractRowId)
+      .eq('kind', 'audit');
+    if (priorAuditsError) {
+      console.error('Failed to load prior audits:', priorAuditsError);
+      return serverError('Failed to reset previous audit');
+    }
+    if (priorAudits && priorAudits.length > 0) {
+      const priorAuditIds = priorAudits.map((a: { id: number }) => a.id);
+      const { error: delFindingsError } = await supabase
+        .from('ai_findings')
+        .delete()
+        .in('audit_id', priorAuditIds);
+      if (delFindingsError) {
+        console.error('Failed to delete prior ai_findings:', delFindingsError);
+        return serverError('Failed to reset previous audit findings');
+      }
+      const { error: delAuditsError } = await supabase
+        .from('audits')
+        .delete()
+        .in('id', priorAuditIds);
+      if (delAuditsError) {
+        console.error('Failed to delete prior audits:', delAuditsError);
+        return serverError('Failed to reset previous audits');
+      }
+    }
+
+    const { error: syncError } = await supabase
+      .from('contracts')
+      .update({ source_code: codeStringToSourceBlocks(code) })
+      .eq('id', contractRowId);
+    if (syncError) console.error('Failed to sync contract source_code:', syncError);
+  } else {
+    const { data: newContract, error: contractError } = await supabase
+      .from('contracts')
+      .insert({
+        owner_id: auth.user_id,
+        is_catalog: false,
+        name: `Audited Contract - ${new Date().toISOString().slice(0, 10)}`,
+        language: 'solidity',
+        status: 'draft',
+        source_code: codeStringToSourceBlocks(code),
+      })
+      .select('id, uuid, name')
+      .single();
+    if (contractError || !newContract) {
+      console.error('Failed to create contract:', contractError);
+      return serverError('Failed to create contract');
+    }
+    contractRowId = newContract.id;
+    contractUuid = newContract.uuid;
+    existingName = typeof newContract.name === 'string' ? newContract.name : null;
+  }
+
+  const { data: audit, error: auditError } = await supabase
+    .from('audits')
+    .insert({
+      contract_id: contractRowId,
+      kind: 'audit',
+      status: 'pending',
+    })
+    .select('id, uuid')
+    .single();
+  if (auditError || !audit) return serverError('Failed to create audit record');
+
+  try {
+    const aiData = await ogChatCompletion({
+      prompt: code,
+      system_prompt: AI_CODEAUDIT_SYSTEM_PROMPT_V2,
+      max_tokens: 8192,
+      temperature: 0.3,
+    });
+
+    const parsed = parseAuditResponse(aiData);
+    const inputLines = code.split(/\r?\n/);
+    const nameFromCode =
+      extractPrimaryContractName(parsed.code_fixed || '') || extractPrimaryContractName(code);
+    const shouldUpdateName =
+      !!nameFromCode && (existingName === null || isDefaultAuditedName(existingName));
+    if (shouldUpdateName) {
+      const { error: nameErr } = await supabase
+        .from('contracts')
+        .update({ name: nameFromCode })
+        .eq('id', contractRowId);
+      if (nameErr) console.error('Failed to update contract name:', nameErr);
+    }
+
+    const findings = parsed.vulnerabilities.length > 0
+      ? parsed.vulnerabilities.map((v) => {
+          const remediation = normalizeRemediation(v.remediation, v, inputLines);
+          const patch = normalizePatch(v.patch, inputLines);
+          const sev = typeof v.severity === 'string' ? v.severity.toLowerCase() : '';
+          const mustHaveTrace = sev === 'critical' || sev === 'high' || sev === 'medium';
+          const attackTrace =
+            v.attack_trace && typeof v.attack_trace === 'object'
+              ? v.attack_trace
+              : mustHaveTrace
+                ? fallbackAttackTrace(v)
+                : null;
+          return ({
+            audit_id: audit.id,
+            severity: normalizeSeverity(v.severity),
+            title: v.name || 'Security Finding',
+            description: Array.isArray(v.reasoning_trace) ? v.reasoning_trace.join('\n') : '',
+            line_start: typeof v.start_line === 'number' ? v.start_line : null,
+            line_end: typeof v.end_line === 'number' ? v.end_line : null,
+            confidence: typeof v.confidence === 'number' ? v.confidence : null,
+            status: 'open',
+            reasoning_trace: { vulnerability: v },
+            remediation: remediation
+              ? remediation
+              : patch
+                ? { patch }
+                : v.suggested_code
+                  ? { suggested_code: v.suggested_code }
+                  : null,
+            attack_trace: attackTrace,
+          });
+        })
+      : [{
+          audit_id: audit.id,
+          severity: 'info',
+          title: 'Security Audit Finding',
+          description: typeof aiData === 'string' ? aiData : JSON.stringify(aiData),
+          status: 'open',
+        }];
+
+    const { data: inserted, error: findingError } = await supabase
+      .from('ai_findings')
+      .insert(findings)
+      .select('uuid, severity, title, description, line_start, line_end, confidence, status, attack_trace, remediation');
+
+    if (findingError) {
+      console.error('Failed to insert ai_findings:', findingError);
+      throw new Error('Failed to save audit findings');
+    }
+
+    await supabase
+      .from('audits')
+      .update({
+        status: 'succeeded',
+        completed_at: new Date().toISOString(),
+        summary: parsed.code_fixed ? 'Audit completed with suggested fixes (0G compute)' : 'Audit completed (0G compute)',
+      })
+      .eq('id', audit.id);
+
+    return json({
+      contract_id: contractUuid,
+      audit_id: audit.uuid,
+      code_fixed: parsed.code_fixed,
+      findings: inserted,
+      backend: '0g-compute',
+    }, 200);
+  } catch (e) {
+    console.error('0G audit job failed:', e);
+    await supabase.from('audits').update({ status: 'failed' }).eq('id', audit.id);
+    return serverError(`Audit (0G) failed: ${String(e)}`);
+  }
 }

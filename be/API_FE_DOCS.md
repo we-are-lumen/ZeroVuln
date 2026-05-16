@@ -22,6 +22,8 @@ This document is for integrating the frontend with Supabase Edge Functions.
   - [4.3 AI Trigger](#43-ai-trigger)
     - [`POST /ai/ai-codegen`](#post-aiai-codegen)
     - [`POST /ai/ai-audit`](#post-aiai-audit)
+    - [`POST /ai/ai-codegen-0g`](#post-aiai-codegen-0g)
+    - [`POST /ai/ai-audit-0g`](#post-aiai-audit-0g)
   - [4.4 Auditor Findings (User Contribution)](#44-auditor-findings-user-contribution)
     - [`GET /auditor-findings`](#get-auditor-findings)
     - [`POST /auditor-findings`](#post-auditor-findings)
@@ -182,7 +184,9 @@ General error return format:
 
 All AI endpoints below are **synchronous**. The handler waits for a response from the AI inference service, writes the results to the database, and then responds with the data immediately.
 
-The AI function exposes two sub-routes under the `ai` function: `POST /ai/ai-codegen` and `POST /ai/ai-audit`. Both require auth headers.
+The AI function exposes four sub-routes under the `ai` function: `POST /ai/ai-codegen`, `POST /ai/ai-audit`, `POST /ai/ai-codegen-0g`, and `POST /ai/ai-audit-0g`. All require auth headers.
+
+The `-0g` variants accept the same request body and return the same response shape as their non-suffixed counterparts (plus a `"backend": "0g-compute"` marker). The only difference is the inference backend: instead of the default sumopod gateway, requests are routed through the **0G Compute Network** via the 0G Serving Broker (`@0glabs/0g-serving-broker`) and answered by the model **`0GM-1.0-35B-A3B`** (configurable via the `OG_COMPUTE_MODEL` env var; the provider can be pinned with `OG_COMPUTE_PROVIDER`, otherwise it is auto-discovered).
 
 General response: status `200` with a payload containing `audit_id`, `contract_id`, and findings/code.
 
@@ -261,6 +265,85 @@ General response: status `200` with a payload containing `audit_id`, `contract_i
   - Findings are stored in the `ai_findings` table (not `auditor_findings`).
   - For findings with severity `critical|high|medium`, an `attack_trace` object is always present (falling back to a stub trace if the model omits it).
   - `remediation` is either a normalized `{ mode: "line", line, replacement_line }` / `{ mode: "function", function_name, replacement_function }` object, or `{ patch: {...} }`, or `null` if the model produced nothing applicable.
+
+#### `POST /ai/ai-codegen-0g`
+- Query params: none
+- Request body: identical to [`POST /ai/ai-codegen`](#post-aiai-codegen).
+  ```json
+  {
+    "prompt": "create a simple ERC20",
+    "contract_id": "<contract_uuid>"
+  }
+  ```
+- Required fields:
+  - `prompt: string`
+- Optional fields:
+  - `contract_id?: string`
+- Response body (example):
+  ```json
+  {
+    "contract_id": "<contract_uuid>",
+    "audit_id": "<audit_uuid>",
+    "generated_code": "pragma solidity ...",
+    "mitigations": [
+      {
+        "name": "Reentrancy",
+        "reason": "applies ReentrancyGuard...",
+        "start_line": 12,
+        "end_line": 20,
+        "excerpt": "...exact code lines from generated_code..."
+      }
+    ],
+    "backend": "0g-compute"
+  }
+  ```
+- Behavior notes:
+  - Same DB side effects as `POST /ai/ai-codegen` (contract upsert, draft naming, `ai_findings` rows per mitigation, default-name promotion).
+  - Inference is executed through the **0G Compute Network** via the 0G Serving Broker against the configured 0G chatbot provider; the model is `0GM-1.0-35B-A3B` by default (overridable via `OG_COMPUTE_MODEL`).
+  - Requires `OG_PRIVATE_KEY` to be set on the backend; the wallet must have a funded sub-account on the targeted provider (acknowledged once on first use).
+  - The response shape adds `"backend": "0g-compute"` so the FE can label which compute path produced the result.
+
+#### `POST /ai/ai-audit-0g`
+- Query params: none
+- Request body: identical to [`POST /ai/ai-audit`](#post-aiai-audit).
+  ```json
+  {
+    "code": "pragma solidity ^0.8.0; contract A { ... }",
+    "contract_id": "<contract_uuid>"
+  }
+  ```
+- Required fields:
+  - `code: string`
+- Optional fields:
+  - `contract_id?: string`
+- Response body (example):
+  ```json
+  {
+    "contract_id": "<contract_uuid>",
+    "audit_id": "<audit_uuid>",
+    "code_fixed": "pragma solidity ... // fixed",
+    "findings": [
+      {
+        "uuid": "<ai_finding_uuid>",
+        "severity": "high",
+        "title": "Reentrancy",
+        "description": "Step 1: ...\nStep 2: ...",
+        "line_start": 42,
+        "line_end": 50,
+        "confidence": 0.92,
+        "status": "open",
+        "attack_trace": { "...": "..." },
+        "remediation": { "...": "..." }
+      }
+    ],
+    "backend": "0g-compute"
+  }
+  ```
+- Behavior notes:
+  - Same re-audit semantics as `POST /ai/ai-audit`: prior `audits` (kind `audit`) and their `ai_findings` for the contract are wiped, and `contracts.source_code` is replaced with the supplied `code`.
+  - Inference is executed through the **0G Compute Network** (model `0GM-1.0-35B-A3B` by default).
+  - Findings, remediation normalization, and attack-trace fallbacks behave identically to `POST /ai/ai-audit`.
+  - Adds `"backend": "0g-compute"` and writes a `summary` of `Audit completed (0G compute)` (or `… with suggested fixes (0G compute)` when a fix is returned) to the `audits` row.
 
 
 ### 4.4 Auditor Findings (User Contribution)
