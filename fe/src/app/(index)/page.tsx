@@ -1,5 +1,15 @@
 "use client";
 
+import {
+  Stepper,
+  StepperDescription,
+  StepperIndicator,
+  StepperItem,
+  StepperNav,
+  StepperSeparator,
+  StepperTitle,
+  StepperTrigger,
+} from "@/components/reui/stepper";
 import BrandLogo from "@/shared/components/ui/brand-logo";
 import { Button } from "@/shared/components/ui/button";
 import { Textarea } from "@/shared/components/ui/textarea";
@@ -9,16 +19,13 @@ import {
   Blockchain03Icon,
   Bug02Icon,
   CheckmarkBadge02Icon,
-  CheckmarkCircle04Icon,
   CpuIcon,
-  CreditCardPosIcon,
   Database01Icon,
   DiscordIcon,
   GithubIcon,
   IdentityCardIcon,
   InstallingUpdates01Icon,
   MoneyBag02Icon,
-  Orbit01Icon,
   Rocket01Icon,
   Shield01Icon,
   SparklesIcon,
@@ -26,49 +33,133 @@ import {
   TwitterIcon,
   Upload01Icon,
   UserGroup02Icon,
+  Wallet03Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, IconSvgElement } from "@hugeicons/react";
 import Image from "next/image";
 import LandingNavbar from "./components/landing-navbar";
-import useQueryPublicStats from "./hooks/use-query-public-stats";
 import StatItem from "./components/stat-item";
+import useQueryPublicStats from "./hooks/use-query-public-stats";
+import { Eip1193Provider } from "@/shared/types/eip1193.type";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { ensureOgGalileoChain } from "@/shared/lib/wallet/og-galileo";
+import { api } from "@/api/client";
 import {
-  Stepper,
-  StepperContent,
-  StepperDescription,
-  StepperIndicator,
-  StepperItem,
-  StepperNav,
-  StepperPanel,
-  StepperSeparator,
-  StepperTitle,
-  StepperTrigger,
-} from "@/components/reui/stepper";
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/shared/components/ui/dialog";
+
+function getEthereum(): Eip1193Provider | undefined {
+  if (typeof window === "undefined") return undefined;
+  return window.ethereum;
+}
+
+const steps = [
+  {
+    title: "Connect your wallet",
+    description:
+      " Click Connect Wallet in the top right. Your wallet address becomes your identity on ZeroVuln. Every audit you run and every contract you generate is tied to your on-chain identity - not a username, not an email.",
+  },
+  {
+    title: "Upload or paste your contract",
+    description:
+      "Click Upload File to import an existing .sol file, or paste your Solidity code directly into the editor. ZeroVuln accepts any standard Solidity contract. No preprocessing or reformatting required.",
+  },
+  {
+    title: "Review your findings and verify on-chain",
+    description:
+      "The AI returns a full audit report in under a second. Each finding shows the vulnerability type, severity, attack scenario, and recommended fix. Every finding is signed with an Agent ID and backed by an immutable reasoning trace on 0G Storage. Click any finding to verify the source on-chain.",
+  },
+];
 
 export default function Home() {
   const { data } = useQueryPublicStats();
 
-  const steps = [
-    {
-      title: "Connect your wallet",
-      description:
-        " Click Connect Wallet in the top right. Your wallet address becomes your identity on ZeroVuln. Every audit you run and every contract you generate is tied to your on-chain identity - not a username, not an email.",
-    },
-    {
-      title: "Upload or paste your contract",
-      description:
-        "Click Upload File to import an existing .sol file, or paste your Solidity code directly into the editor. ZeroVuln accepts any standard Solidity contract. No preprocessing or reformatting required.",
-    },
-    {
-      title: "Review your findings and verify on-chain",
-      description:
-        "The AI returns a full audit report in under a second. Each finding shows the vulnerability type, severity, attack scenario, and recommended fix. Every finding is signed with an Agent ID and backed by an immutable reasoning trace on 0G Storage. Click any finding to verify the source on-chain.",
-    },
-  ];
+  const router = useRouter();
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [isDialogOpen, setisDialogOpen] = useState(true);
+
+  const openDialog = () => setisDialogOpen(true);
+
+  const hasWallet = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    return Boolean(localStorage.getItem("walletAddress"));
+  }, []);
+
+  useEffect(() => {
+    if (hasWallet) router.replace("/dashboard");
+  }, [hasWallet, router]);
+
+  async function handleConnect() {
+    const ethereum = getEthereum();
+    if (!ethereum) {
+      alert("Wallet provider tidak ditemukan. Install MetaMask dulu.");
+      return;
+    }
+
+    try {
+      setIsConnecting(true);
+      const accounts = (await ethereum.request({
+        method: "eth_requestAccounts",
+      })) as unknown as string[];
+
+      await ensureOgGalileoChain(ethereum);
+
+      const wallet = accounts?.[0];
+      if (!wallet) throw new Error("Tidak ada akun wallet yang dipilih.");
+
+      localStorage.setItem("walletAddress", wallet);
+
+      try {
+        await api.get("me").json();
+      } catch (e: unknown) {
+        console.error(e);
+        localStorage.removeItem("walletAddress");
+        alert(
+          "Connect wallet berhasil, tapi gagal handshake ke backend (/me). Pastikan backend jalan dan env FE sudah benar.",
+        );
+        return;
+      }
+
+      router.push("/dashboard");
+    } catch (err: unknown) {
+      console.error(err);
+      const message =
+        err instanceof Error ? err.message : "Gagal connect wallet.";
+      alert(message);
+    } finally {
+      setIsConnecting(false);
+    }
+  }
 
   return (
     <main>
       <LandingNavbar />
+
+      <Dialog open={isDialogOpen} onOpenChange={setisDialogOpen}>
+        <form>
+          <DialogContent className="sm:max-w-sm">
+            <DialogHeader>
+              <DialogTitle>Connect Your Wallet</DialogTitle>
+              <DialogDescription>
+                Please connect your authorized wallet to get started.
+              </DialogDescription>
+              <div></div>
+            </DialogHeader>
+            <div className="flex justify-end">
+              <Button onClick={handleConnect} disabled={isConnecting}>
+                <HugeiconsIcon icon={Wallet03Icon} strokeWidth={2} size={24} />
+                Connect Wallet
+              </Button>
+            </div>
+          </DialogContent>
+        </form>
+      </Dialog>
 
       <section className="relative z-0 flex h-[90dvh] flex-col items-center justify-center gap-2 overflow-hidden text-center">
         <div className="absolute bottom-[-99%] -z-10 aspect-video w-[120vw]">
@@ -99,15 +190,17 @@ export default function Home() {
             <input type="file" className="hidden" accept=".sol" />
 
             <Button
+              onClick={openDialog}
               variant="ghost"
               size="sm"
+              disabled={isConnecting}
               className="gap-2 text-mist-400 hover:text-white"
             >
               <HugeiconsIcon icon={Upload01Icon} size={18} fontWeight={2} />
               <span>Upload File</span>
             </Button>
 
-            <Button>
+            <Button disabled={isConnecting} onClick={openDialog}>
               <HugeiconsIcon icon={SparklesIcon} size={24} strokeWidth={2} />
               Generate Contract
             </Button>
@@ -401,7 +494,7 @@ export default function Home() {
             the more recognition your contribution carries on-chain.
           </p>
           <div className="mt-10 space-y-2">
-            <Button>
+            <Button disabled={isConnecting} onClick={openDialog}>
               Audit Your First Contract{" "}
               <HugeiconsIcon icon={ArrowUpRight01Icon} strokeWidth={2} />
             </Button>
