@@ -140,11 +140,13 @@ Full request/response shapes and cURL examples live in [`API_FE_DOCS.md`](./API_
 | User contracts        | `contracts`         | `GET / POST /contracts` · `GET / PATCH / DELETE /contracts/:uuid`                              |
 | Catalog (public)      | `contract_catalog`  | `GET /contract_catalog` · `GET /contract_catalog/:uuid`                                        |
 | Catalog (admin)       | `contract_catalog`  | `GET / POST /contract_catalog/admin` · `GET / PATCH /contract_catalog/admin/:uuid`             |
-| AI triggers           | `ai`                | `POST /ai-codegen` · `/ai-audit` → `200 { audit_id, ... }`                                    |
+| AI triggers           | `ai`                | `POST /ai-codegen` · `/ai-audit` · `/ai-codegen-0g`<sup>🧪</sup> · `/ai-audit-0g`<sup>🧪</sup> → `200 { audit_id, ... }` |
 | Audits                | `audits`            | `GET /audits?contract_id=&status=` · `GET /audits/:uuid` (polling, embeds `ai_findings`)       |
 | AI findings           | `ai-findings`       | `GET / PATCH /ai-findings/:uuid`                                                               |
 | Auditor contributions | `auditor-findings`  | `GET / POST /auditor-findings` · `GET / PATCH /auditor-findings/:uuid` · `PATCH …/submit`      |
 | Admin review          | `admin`             | `GET /admin/auditor-findings?review_status=` · `POST …/:uuid/approve` \| `…/reject`            |
+
+> <sup>🧪</sup> **Research preview.** The `/ai-codegen-0g` and `/ai-audit-0g` endpoints are tagged as **research-only** and are **not yet on the production hot path** — see [Research Preview: 0G Compute Endpoints](#research-preview-0g-compute-endpoints) below.
 
 ### AI Flow — Synchronous Execution
 
@@ -213,6 +215,9 @@ Copy `.env.example` to `.env`. For deployed environments, use `supabase secrets 
 | `OG_STORAGE_NODE`           |    –     | Legacy `POST /upload` fallback; defaults to `OG_STORAGE_INDEXER`           |
 | `OG_PRIVATE_KEY`            |   ✓\*    | Signer for SDK uploads. Without it, uploads fall back to the legacy node   |
 | `OG_COMPUTE_BROKER`         |   ✓\*    | 0G Compute broker HTTP endpoint. Required for any AI trigger to succeed    |
+| `OG_COMPUTE_PROVIDER`       |    –     | Optional explicit 0G chatbot provider address. If unset, auto-discovered by matching `OG_COMPUTE_MODEL` |
+| `OG_COMPUTE_MODEL`          |    –     | Model name routed for the `/ai-*-0g` endpoints. Defaults to `0GM-1.0-35B-A3B`             |
+| `AI_API_KEY`                |   ✓\*    | API key for the default (`sumopod`) inference gateway used by `/ai-codegen` and `/ai-audit` |
 | `AI_MODEL`                  |    –     | Defaults to `Qwen2.5-0.5B-Instruct` (overridable per job)                  |
 
 `*` Endpoints stay reachable without these, but the feature itself will fail at execution time.
@@ -269,7 +274,38 @@ supabase db push
 Every function deploys to its own slug at `/functions/v1/<name>`. Inside each `index.ts`, the path after the function name is used for manual routing:
 
 - `contracts/:uuid` → handler reads segment index 4 from `/functions/v1/contracts/<uuid>`.
-- `ai/index.ts` routes on `pathParts[functionIndex + 2]` (`ai-codegen | ai-audit`). Because Supabase has no native path multiplexing, the `ai` function is also deployed under the slugs `ai-codegen` and `ai-audit` (or rewritten on the FE) so the segment is always present.
+- `ai/index.ts` routes on `pathParts[functionIndex + 2]` (`ai-codegen | ai-audit | ai-codegen-0g | ai-audit-0g`). Because Supabase has no native path multiplexing, the `ai` function is also deployed under each of those slugs (or rewritten on the FE) so the segment is always present. The `-0g` variants run inference on the **0G Compute Network** (`0GM-1.0-35B-A3B` by default) via the 0G Serving Broker, instead of the default sumopod gateway.
+
+---
+
+## Research Preview: 0G Compute Endpoints
+
+> **Status:** 🧪 Research / experimental · **Not for production traffic** · Tracked under the **next-quarter dev roadmap**.
+
+`POST /ai/ai-codegen-0g` and `POST /ai/ai-audit-0g` are functionally identical to their non-suffixed counterparts (`/ai-codegen`, `/ai-audit`) — same request body, same DB side effects, same response shape (with an added `"backend": "0g-compute"` marker). The only difference is the **inference backend**: instead of routing to the default sumopod gateway, requests are dispatched through the **0G Serving Broker** to the 0G Compute Network and answered by the model **`0GM-1.0-35B-A3B`** (35B-parameter MoE, ~3B active per token).
+
+### Why "research-only"?
+
+`0GM-1.0-35B-A3B` was published by 0G Labs on **14 May 2026** — only days before this commit. Because the model and its provider footprint are still very new, we are treating the two `-0g` endpoints as a **research surface** rather than a drop-in replacement for the existing AI triggers. Concretely:
+
+- **Provider availability is still volatile.** At any given moment only a small handful of 0G chatbot providers may be serving `0GM-1.0-35B-A3B`. Auto-discovery (`OG_COMPUTE_PROVIDER` left empty) can therefore fail with `No 0G chatbot provider found for model "0GM-1.0-35B-A3B"`.
+- **Output quality has not been benchmarked against our audit harness yet.** The existing prompts (`AI_CODEAUDIT_SYSTEM_PROMPT_V2`, `AI_CODEGEN_SYSTEM_PROMPT`) were tuned against Qwen / Gemini-class models. We expect the JSON-strictness and line-accuracy invariants to need prompt re-tuning for `0GM-1.0`.
+- **Latency and cost characteristics are unknown.** Inference still funnels through `processResponse()` for on-chain fee settlement, which adds a non-trivial tail latency we have not yet profiled end-to-end inside an edge function's 60-second budget.
+- **TEE-verification coverage for the new model is partial.** Some providers exposing `0GM-1.0-35B-A3B` are not yet TEE-attested — acceptable for experimentation, not yet for user-facing security workloads.
+
+For these reasons the FE should keep calling `/ai-codegen` and `/ai-audit` as the **default** path. The `-0g` endpoints are intentionally available so the team (and curious early adopters) can validate the model, capture benchmarks, and iterate on prompts — without forking the codebase.
+
+### Roadmap
+
+The graduation plan for the `-0g` endpoints, once the model stabilises:
+
+1. **Prompt re-tuning** against `0GM-1.0-35B-A3B` — restore the JSON-only / line-accuracy guarantees on the audit & codegen prompts for this model family.
+2. **Bench suite** — run the existing audit fixtures (reentrancy, access-control, arithmetic, DoS) through both backends and publish a head-to-head report (severity recall, false-positive rate, code-fix compile success).
+3. **TEE-verified provider pinning** — set a curated allow-list via `OG_COMPUTE_PROVIDER` so the auto-discovery path can only fall onto attested providers.
+4. **Latency budgeting** — measure end-to-end `ogChatCompletion()` against the Supabase edge timeout; introduce streaming + early-flush if needed.
+5. **Promotion** — once steps 1–4 are green, swap the default `/ai-codegen` / `/ai-audit` handlers to call `ogChatCompletion()` and retire the sumopod gateway (keeping the `-0g` slugs as permanent aliases for backwards compatibility).
+
+Until then: **treat `/ai-codegen-0g` and `/ai-audit-0g` as experimental endpoints**, useful for research and for showcasing end-to-end 0G integration, and expect breaking changes / occasional 5xx responses while the underlying model and provider network mature.
 
 ---
 
