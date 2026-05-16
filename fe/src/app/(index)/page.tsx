@@ -170,7 +170,7 @@ export default function Home() {
 
       <section className="relative z-0 flex h-[90dvh] flex-col items-center justify-center gap-2 overflow-hidden text-center">
         <div className="absolute bottom-[-99%] -z-10 aspect-video w-[120vw]">
-          <Image src="/landing-back.png" alt="back" fill />
+          <Image src="/landing-back.png" alt="back" fill loading="eager" />
         </div>
         <div className="absolute bottom-0 h-44 w-full bg-linear-to-t from-background to-transparent"></div>
         <h2 className="text-6xl font-black uppercase">
