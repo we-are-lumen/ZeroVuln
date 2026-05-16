@@ -52,7 +52,9 @@ import LandingNavbar from "./components/landing-navbar";
 import StatItem from "./components/stat-item";
 import useQueryPublicStats from "./hooks/use-query-public-stats";
 import { Element } from "react-scroll";
-import { ensureOgGalileoChain } from "@/shared/lib/wallet/og-galileo";
+import { ensureOgChain } from "@/shared/lib/wallet/og-chain";
+import { toast } from "sonner";
+import { APP_PATH } from "@/shared/constants/app-path";
 
 function getEthereum(): Eip1193Provider | undefined {
   if (typeof window === "undefined") return undefined;
@@ -99,13 +101,13 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    if (hasWallet) router.replace("/dashboard");
+    if (hasWallet) router.replace(APP_PATH.dashboard.index);
   }, [hasWallet, router]);
 
   async function handleConnect() {
     const ethereum = getEthereum();
     if (!ethereum) {
-      alert("Wallet provider tidak ditemukan. Install MetaMask dulu.");
+      toast.error("Wallet provider not found. Please install MetaMask first.");
       return;
     }
 
@@ -115,7 +117,7 @@ export default function Home() {
         method: "eth_requestAccounts",
       })) as unknown as string[];
 
-      await ensureOgGalileoChain(ethereum);
+      await ensureOgChain(ethereum);
 
       const wallet = accounts?.[0];
       if (!wallet) throw new Error("Tidak ada akun wallet yang dipilih.");
@@ -127,9 +129,7 @@ export default function Home() {
       } catch (e: unknown) {
         console.error(e);
         localStorage.removeItem("walletAddress");
-        alert(
-          "Connect wallet berhasil, tapi gagal handshake ke backend (/me). Pastikan backend jalan dan env FE sudah benar.",
-        );
+        toast.error("Something went wrong");
         return;
       }
 
@@ -137,8 +137,8 @@ export default function Home() {
     } catch (err: unknown) {
       console.error(err);
       const message =
-        err instanceof Error ? err.message : "Gagal connect wallet.";
-      alert(message);
+        err instanceof Error ? err.message : "Failed connecting to wallet.";
+      toast.error(message);
     } finally {
       setIsConnecting(false);
     }
@@ -146,7 +146,7 @@ export default function Home() {
 
   return (
     <main>
-      <LandingNavbar />
+      <LandingNavbar {...{ handleConnect, isConnecting }} />
 
       <Dialog open={isDialogOpen} onOpenChange={setisDialogOpen}>
         <form>
