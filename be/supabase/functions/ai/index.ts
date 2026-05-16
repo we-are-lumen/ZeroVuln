@@ -139,9 +139,14 @@ Deno.serve(async (req: Request) => {
   if (segment === 'ai-audit') {
     return handleAudit(req, auth, body);
   }
-  // 0G Compute Network variants — same business logic as the default endpoints,
-  // but inference is routed through the 0G Serving Broker against the configured
-  // 0G chatbot provider (default model 0GM-1.0-35B-A3B). See _shared/og-compute.ts.
+  // 🧪 RESEARCH PREVIEW — 0G Compute Network variants.
+  // Same business logic as the default endpoints above, but inference is
+  // routed through the 0G Serving Broker against the configured 0G chatbot
+  // provider (default model `0GM-1.0-35B-A3B`, released 14 May 2026).
+  // These are NOT on the production hot path — FE should keep using
+  // `/ai-codegen` and `/ai-audit` as the default. See `handleCodegenOg`
+  // below and the "Research Preview: 0G Compute Endpoints" section of
+  // be/README.md for the graduation roadmap.
   if (segment === 'ai-codegen-0g') {
     return handleCodegenOg(req, auth, body);
   }
@@ -934,14 +939,17 @@ function parseAuditResponse(aiData: unknown): { code_fixed: string; vulnerabilit
   return { code_fixed: '', vulnerabilities: [] };
 }
 
-// ---------------------------------------------------------------------------
-// 0G Compute variants (ai-codegen-0g / ai-audit-0g)
-// ---------------------------------------------------------------------------
-// These mirror handleCodegen / handleAudit but route inference through the
-// 0G Compute Network (via the 0G Serving Broker SDK) instead of the sumopod
-// gateway. The targeted model is `0GM-1.0-35B-A3B` (overridable via the
-// `OG_COMPUTE_MODEL` env var; provider overridable via `OG_COMPUTE_PROVIDER`).
-
+// ===========================================================================
+// 🧪 RESEARCH PREVIEW — 0G Compute variants (ai-codegen-0g / ai-audit-0g)
+// ===========================================================================
+//
+// STATUS: Research / experimental — NOT on the production hot path.
+//         Tracked under the next-quarter dev roadmap (see be/README.md →
+//         "Research Preview: 0G Compute Endpoints").
+//
+// 🧪 RESEARCH PREVIEW — see banner above.
+// Counterpart of `handleCodegen` running on 0G Compute Network. Same DB side
+// effects + response shape, plus a `"backend": "0g-compute"` marker.
 async function handleCodegenOg(
   _req: Request,
   auth: { user_id: number },
@@ -1082,6 +1090,11 @@ async function handleCodegenOg(
   }
 }
 
+// 🧪 RESEARCH PREVIEW — see "0G Compute variants" banner above `handleCodegenOg`.
+// Counterpart of `handleAudit` running on 0G Compute Network (model
+// `0GM-1.0-35B-A3B`). Same re-audit semantics + response shape as
+// `handleAudit`, plus a `"backend": "0g-compute"` marker. Not production-ready
+// yet — see the roadmap in be/README.md (Research Preview section).
 async function handleAuditOg(
   _req: Request,
   auth: { user_id: number },
