@@ -225,9 +225,9 @@ export default function Home() {
             <span className="font-semibold text-primary">did not reach</span>{" "}
             the developer in time.
           </p>
-          <p className="text-lg text-mist-400">
-            - Immunefi Web3 Security Report H1 2024, Chainalysis Crypto Crime
-            Report 2024 -
+          <p className="text-lg text-mist-400 italic">
+            — Immunefi Web3 Security Report H1 2024, Chainalysis Crypto Crime
+            Report 2024 —
           </p>
         </div>
       </section>
