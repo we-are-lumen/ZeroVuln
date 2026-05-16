@@ -1,5 +1,6 @@
 "use client";
 
+import { api } from "@/api/client";
 import {
   Stepper,
   StepperDescription,
@@ -12,7 +13,15 @@ import {
 } from "@/components/reui/stepper";
 import BrandLogo from "@/shared/components/ui/brand-logo";
 import { Button } from "@/shared/components/ui/button";
-import { Textarea } from "@/shared/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/shared/components/ui/dialog";
+import { ensureOgGalileoChain } from "@/shared/lib/wallet/og-galileo";
+import { Eip1193Provider } from "@/shared/types/eip1193.type";
 import {
   AiBrain04Icon,
   ArrowUpRight01Icon,
@@ -37,23 +46,13 @@ import {
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon, IconSvgElement } from "@hugeicons/react";
 import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { Typewriter } from "react-simple-typewriter";
 import LandingNavbar from "./components/landing-navbar";
 import StatItem from "./components/stat-item";
 import useQueryPublicStats from "./hooks/use-query-public-stats";
-import { Eip1193Provider } from "@/shared/types/eip1193.type";
-import { useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
-import { ensureOgGalileoChain } from "@/shared/lib/wallet/og-galileo";
-import { api } from "@/api/client";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/shared/components/ui/dialog";
-import { Typewriter } from "react-simple-typewriter";
+import { Element } from "react-scroll";
 
 function getEthereum(): Eip1193Provider | undefined {
   if (typeof window === "undefined") return undefined;
@@ -233,151 +232,165 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="mt-10 flex gap-20 space-y-10 px-20 py-20">
-        <div className="mx-auto max-w-[60vw] basis-[60%]">
-          <div className="sticky top-32 space-y-5">
-            <h2 className="text-5xl font-bold">
-              WHY DEVELOPERS SHIP <br />{" "}
-              <span className="text-primary">SAFER CONTRACTS</span> <br /> WITH
-              ZEROVULN
+      <Element name="benefits">
+        <section
+          id="benefits"
+          className="mt-10 flex gap-20 space-y-10 px-20 py-20"
+        >
+          <div className="mx-auto max-w-[60vw] basis-[60%]">
+            <div className="sticky top-32 space-y-5">
+              <h2 className="text-5xl font-bold">
+                WHY DEVELOPERS SHIP <br />{" "}
+                <span className="text-primary">SAFER CONTRACTS</span> <br />{" "}
+                WITH ZEROVULN
+              </h2>
+              <p className="text-lg text-mist-400">
+                Most smart contract exploits are not novel attacks. They are
+                known patterns that never reached the right developer at the
+                right time. ZeroVuln puts the collective knowledge of the
+                security research community directly inside your development
+                workflow - signed, verified, and always on.
+              </p>
+            </div>
+          </div>
+          <div className="flex basis-[40%] flex-col gap-4">
+            <div className="space-y-2 rounded-2xl border bg-mist-900/50 p-6">
+              <HugeiconsIcon
+                icon={Rocket01Icon}
+                className="mb-4 text-primary"
+              />
+              <h4 className="text-xl font-bold">Speed </h4>
+              <p className="text-mist-400">
+                Audit in seconds, not weeks. Paste your contract. Get a full AI
+                audit in under a second. No waiting for a firm to schedule your
+                project. No weeks of back-and-forth. Ship on your own timeline.
+              </p>
+            </div>
+            <div className="space-y-2 rounded-2xl border bg-mist-900/50 p-6">
+              <HugeiconsIcon
+                icon={MoneyBag02Icon}
+                className="mb-4 text-primary"
+              />
+              <h4 className="text-xl font-bold">Cost</h4>
+              <p className="text-mist-400">
+                Professional-grade security at $30 a month. A traditional smart
+                contract audit costs $10,000 to $50,000. ZeroVuln gives indie
+                developers and small teams access to the same quality of
+                security knowledge - at a price that makes sense before you have
+                revenue.
+              </p>
+            </div>
+            <div className="space-y-2 rounded-2xl border bg-mist-900/50 p-6">
+              <HugeiconsIcon
+                icon={CheckmarkBadge02Icon}
+                className="mb-4 text-primary"
+              />
+              <h4 className="text-xl font-bold">Verifiability </h4>
+              <p className="text-mist-400">
+                Every finding is provable, not just claimed. Every AI output is
+                signed with an Agent ID and backed by an immutable reasoning
+                trace on 0G Storage. You can verify the logic behind any finding
+                - independently, on-chain, at any time. This is not trust. This
+                is proof.
+              </p>
+            </div>
+            <div className="space-y-2 rounded-2xl border bg-mist-900/50 p-6">
+              <HugeiconsIcon
+                icon={InstallingUpdates01Icon}
+                className="mb-4 text-primary"
+              />
+              <h4 className="text-xl font-bold">Training</h4>
+              <p className="text-mist-400">
+                Trained by real whitehat hackers. ZeroVuln is not trained on
+                generic code datasets. Every vulnerability pattern in our model
+                was submitted by a security researcher, validated by a senior
+                auditor, and anchored on-chain before it entered a single
+                training run.
+              </p>
+            </div>
+          </div>
+        </section>
+      </Element>
+
+      <Element name="spesifications">
+        <section className="space-y-10 px-20 py-24">
+          <div className="mx-auto max-w-[70vw] space-y-5 text-center">
+            <h2 className="text-5xl font-bold uppercase">
+              Built on <span className="text-primary">0G</span>. Verified at
+              every step.
             </h2>
             <p className="text-lg text-mist-400">
-              Most smart contract exploits are not novel attacks. They are known
-              patterns that never reached the right developer at the right time.
-              ZeroVuln puts the collective knowledge of the security research
-              community directly inside your development workflow - signed,
-              verified, and always on.
+              ZeroVuln uses 0G&apos;s modular infrastructure end to end - from
+              storing vulnerability labels to signing every AI output. Every
+              component is chosen because it makes the audit trail verifiable,
+              not just logged.
             </p>
           </div>
-        </div>
-        <div className="flex basis-[40%] flex-col gap-4">
-          <div className="space-y-2 rounded-2xl border bg-mist-900/50 p-6">
-            <HugeiconsIcon icon={Rocket01Icon} className="mb-4 text-primary" />
-            <h4 className="text-xl font-bold">Speed </h4>
-            <p className="text-mist-400">
-              Audit in seconds, not weeks. Paste your contract. Get a full AI
-              audit in under a second. No waiting for a firm to schedule your
-              project. No weeks of back-and-forth. Ship on your own timeline.
-            </p>
+          <div className="flex flex-wrap justify-center gap-3">
+            <div className="w-[30%] space-y-2 rounded-2xl border bg-mist-900/50 p-6">
+              <HugeiconsIcon
+                icon={Database01Icon}
+                className="mb-4 text-primary"
+              />
+              <h4 className="text-xl font-bold">0G Storage</h4>
+              <p className="text-mist-400">
+                Every vulnerability label, reasoning trace, and training dataset
+                is stored on 0G Storage. Content-addressed and immutable - once
+                a label lands, it cannot be altered. Only verified.
+              </p>
+            </div>
+            <div className="w-[30%] space-y-2 rounded-2xl border bg-mist-900/50 p-6">
+              <HugeiconsIcon icon={CpuIcon} className="mb-4 text-primary" />
+              <h4 className="text-xl font-bold">0G Compute</h4>
+              <p className="text-mist-400">
+                The AI model fine-tunes weekly on validated labels using 0G
+                Compute. Inference runs inside a Trusted Execution Environment
+                via Phala dStack - so the model output is tamper-proof, not just
+                stored.
+              </p>
+            </div>
+            <div className="w-[30%] space-y-2 rounded-2xl border bg-mist-900/50 p-6">
+              <HugeiconsIcon
+                icon={Blockchain03Icon}
+                className="mb-4 text-primary"
+              />
+              <h4 className="text-xl font-bold">0G Chain</h4>
+              <p className="text-mist-400">
+                Every audit finding and reviewer verdict is anchored on 0G
+                Chain. The record is permanent, publicly verifiable, and tied to
+                the wallet address of the researcher who contributed the
+                original vulnerability pattern.
+              </p>
+            </div>
+            <div className="w-[30%] space-y-2 rounded-2xl border bg-mist-900/50 p-6">
+              <HugeiconsIcon
+                icon={IdentityCardIcon}
+                className="mb-4 text-primary"
+              />
+              <h4 className="text-xl font-bold">Agent ID</h4>
+              <p className="text-mist-400">
+                Every AI output is signed with an Agent ID - a cryptographic
+                identity standard for AI agents on 0G. You always know which
+                agent produced a result, when it was produced, and what
+                reasoning it used.
+              </p>
+            </div>
+            <div className="w-[30%] space-y-2 rounded-2xl border bg-mist-900/50 p-6">
+              <HugeiconsIcon
+                icon={AiBrain04Icon}
+                className="mb-4 text-primary"
+              />
+              <h4 className="text-xl font-bold">AI Model</h4>
+              <p className="text-mist-400">
+                Qwen2.5-Coder, fine-tuned weekly via LoRA on expert-validated
+                vulnerability labels. Delivered via Hugging Face. Training data
+                sourced exclusively from verified whitehat researcher
+                submissions - no generic code datasets.
+              </p>
+            </div>
           </div>
-          <div className="space-y-2 rounded-2xl border bg-mist-900/50 p-6">
-            <HugeiconsIcon
-              icon={MoneyBag02Icon}
-              className="mb-4 text-primary"
-            />
-            <h4 className="text-xl font-bold">Cost</h4>
-            <p className="text-mist-400">
-              Professional-grade security at $30 a month. A traditional smart
-              contract audit costs $10,000 to $50,000. ZeroVuln gives indie
-              developers and small teams access to the same quality of security
-              knowledge - at a price that makes sense before you have revenue.
-            </p>
-          </div>
-          <div className="space-y-2 rounded-2xl border bg-mist-900/50 p-6">
-            <HugeiconsIcon
-              icon={CheckmarkBadge02Icon}
-              className="mb-4 text-primary"
-            />
-            <h4 className="text-xl font-bold">Verifiability </h4>
-            <p className="text-mist-400">
-              Every finding is provable, not just claimed. Every AI output is
-              signed with an Agent ID and backed by an immutable reasoning trace
-              on 0G Storage. You can verify the logic behind any finding -
-              independently, on-chain, at any time. This is not trust. This is
-              proof.
-            </p>
-          </div>
-          <div className="space-y-2 rounded-2xl border bg-mist-900/50 p-6">
-            <HugeiconsIcon
-              icon={InstallingUpdates01Icon}
-              className="mb-4 text-primary"
-            />
-            <h4 className="text-xl font-bold">Training</h4>
-            <p className="text-mist-400">
-              Trained by real whitehat hackers. ZeroVuln is not trained on
-              generic code datasets. Every vulnerability pattern in our model
-              was submitted by a security researcher, validated by a senior
-              auditor, and anchored on-chain before it entered a single training
-              run.
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="space-y-10 px-20 py-24">
-        <div className="mx-auto max-w-[70vw] space-y-5 text-center">
-          <h2 className="text-5xl font-bold uppercase">
-            Built on <span className="text-primary">0G</span>. Verified at every
-            step.
-          </h2>
-          <p className="text-lg text-mist-400">
-            ZeroVuln uses 0G&apos;s modular infrastructure end to end - from
-            storing vulnerability labels to signing every AI output. Every
-            component is chosen because it makes the audit trail verifiable, not
-            just logged.
-          </p>
-        </div>
-        <div className="flex flex-wrap justify-center gap-3">
-          <div className="w-[30%] space-y-2 rounded-2xl border bg-mist-900/50 p-6">
-            <HugeiconsIcon
-              icon={Database01Icon}
-              className="mb-4 text-primary"
-            />
-            <h4 className="text-xl font-bold">0G Storage</h4>
-            <p className="text-mist-400">
-              Every vulnerability label, reasoning trace, and training dataset
-              is stored on 0G Storage. Content-addressed and immutable - once a
-              label lands, it cannot be altered. Only verified.
-            </p>
-          </div>
-          <div className="w-[30%] space-y-2 rounded-2xl border bg-mist-900/50 p-6">
-            <HugeiconsIcon icon={CpuIcon} className="mb-4 text-primary" />
-            <h4 className="text-xl font-bold">0G Compute</h4>
-            <p className="text-mist-400">
-              The AI model fine-tunes weekly on validated labels using 0G
-              Compute. Inference runs inside a Trusted Execution Environment via
-              Phala dStack - so the model output is tamper-proof, not just
-              stored.
-            </p>
-          </div>
-          <div className="w-[30%] space-y-2 rounded-2xl border bg-mist-900/50 p-6">
-            <HugeiconsIcon
-              icon={Blockchain03Icon}
-              className="mb-4 text-primary"
-            />
-            <h4 className="text-xl font-bold">0G Chain</h4>
-            <p className="text-mist-400">
-              Every audit finding and reviewer verdict is anchored on 0G Chain.
-              The record is permanent, publicly verifiable, and tied to the
-              wallet address of the researcher who contributed the original
-              vulnerability pattern.
-            </p>
-          </div>
-          <div className="w-[30%] space-y-2 rounded-2xl border bg-mist-900/50 p-6">
-            <HugeiconsIcon
-              icon={IdentityCardIcon}
-              className="mb-4 text-primary"
-            />
-            <h4 className="text-xl font-bold">Agent ID</h4>
-            <p className="text-mist-400">
-              Every AI output is signed with an Agent ID - a cryptographic
-              identity standard for AI agents on 0G. You always know which agent
-              produced a result, when it was produced, and what reasoning it
-              used.
-            </p>
-          </div>
-          <div className="w-[30%] space-y-2 rounded-2xl border bg-mist-900/50 p-6">
-            <HugeiconsIcon icon={AiBrain04Icon} className="mb-4 text-primary" />
-            <h4 className="text-xl font-bold">AI Model</h4>
-            <p className="text-mist-400">
-              Qwen2.5-Coder, fine-tuned weekly via LoRA on expert-validated
-              vulnerability labels. Delivered via Hugging Face. Training data
-              sourced exclusively from verified whitehat researcher submissions
-              - no generic code datasets.
-            </p>
-          </div>
-        </div>
-      </section>
+        </section>
+      </Element>
 
       <section className="px-20 py-24">
         <div className="mx-auto max-w-[70vw] space-y-5 text-center">
@@ -414,103 +427,107 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="flex flex-col items-center justify-center gap-20 px-20 py-24">
-        <div className="mx-auto max-w-[70vw] space-y-5 text-center">
-          <h2 className="text-5xl font-bold uppercase">
-            From code to verified audit <br /> in{" "}
-            <span className="text-primary">three steps</span>
-          </h2>
-          <p className="text-lg text-mist-400">
-            No setup. No integrations. No waiting for a firm to reply. Connect
-            your wallet, paste your contract, and get an AI-powered audit with a
-            cryptographically verifiable trail - in under a minute.
-          </p>
-        </div>
-        <Stepper
-          className="flex max-w-[40vw] flex-col items-center justify-center gap-10"
-          defaultValue={0}
-          orientation="vertical"
-          indicators={{
-            completed: <HugeiconsIcon icon={Tick02Icon} size={16} />,
-          }}
-        >
-          <StepperNav>
-            {steps.map((step, index) => (
-              <StepperItem
-                key={index}
-                step={index + 1}
-                className="relative items-start not-last:flex-1"
-              >
-                <StepperTrigger className="items-start gap-2.5 pb-12 last:pb-0">
-                  <StepperIndicator className="data-[state=completed]:bg-success data-[state=completed]:text-white">
-                    {index + 1}
-                  </StepperIndicator>
-                  <div className="mt-0.5 -translate-y-1 text-left">
-                    <StepperTitle className="text-lg">
-                      {step.title}
-                    </StepperTitle>
-                    <StepperDescription className="text-base">
-                      {step.description}
-                    </StepperDescription>
-                    {index === 1 && (
-                      <div>
-                        <div className="flex items-center gap-5 py-3 text-mist-500">
-                          <div className="h-px w-full bg-mist-600"></div>
-                          <p>or</p>
-                          <div className="h-px w-full bg-mist-600"></div>
-                        </div>
-                        <div>
-                          <StepperTitle className="text-lg">
-                            Describe what you want to build
-                          </StepperTitle>
-                          <StepperDescription className="text-base">
-                            Click Generate Contract and describe your contract
-                            in plain English. Specify the token type, access
-                            controls, transfer rules, or any other logic. The AI
-                            generates production-ready Solidity from your
-                            description - no prior Solidity experience required
-                            to get started.
-                          </StepperDescription>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </StepperTrigger>
-                {index < steps.length - 1 && (
-                  <StepperSeparator className="group-data-[state=completed]/step:bg-success absolute inset-y-0 top-7 left-3 -order-1 m-0 -translate-x-1/2 group-data-[orientation=vertical]/stepper-nav:h-[calc(100%-2rem)]" />
-                )}
-              </StepperItem>
-            ))}
-          </StepperNav>
-        </Stepper>
-      </section>
-
-      <section className="px-20 py-24">
-        <div className="space-y-5 rounded-2xl border-2 bg-mist-900/50 p-6 py-10 text-center">
-          <h2 className="text-4xl font-bold uppercase">
-            Are you a security researcher? <br />{" "}
-            <span className="text-primary">Contribute</span> and{" "}
-            <span className="text-primary">earn</span>.
-          </h2>
-          <p className="text-lg font-medium text-mist-400">
-            Submit a structured vulnerability pattern - the code, the attack
-            scenario, and the fix. A senior auditor reviews and validates your
-            submission on-chain. Once approved, your label enters the training
-            set and your wallet address is permanently attributed to every
-            finding it generates. The more your pattern matches in live audits,
-            the more recognition your contribution carries on-chain.
-          </p>
-          <div className="mt-10 space-y-2">
-            <Button disabled={isConnecting} onClick={openDialog}>
-              Audit Your First Contract{" "}
-              <HugeiconsIcon icon={ArrowUpRight01Icon} strokeWidth={2} />
-            </Button>
-            <p className="text-sm text-mist-400">
-              No credit card. No setup. Connect your wallet and ready to go.
+      <Element name="how-to">
+        <section className="flex flex-col items-center justify-center gap-20 px-20 py-24">
+          <div className="mx-auto max-w-[70vw] space-y-5 text-center">
+            <h2 className="text-5xl font-bold uppercase">
+              From code to verified audit <br /> in{" "}
+              <span className="text-primary">three steps</span>
+            </h2>
+            <p className="text-lg text-mist-400">
+              No setup. No integrations. No waiting for a firm to reply. Connect
+              your wallet, paste your contract, and get an AI-powered audit with
+              a cryptographically verifiable trail - in under a minute.
             </p>
           </div>
-        </div>
-      </section>
+          <Stepper
+            className="flex max-w-[40vw] flex-col items-center justify-center gap-10"
+            defaultValue={0}
+            orientation="vertical"
+            indicators={{
+              completed: <HugeiconsIcon icon={Tick02Icon} size={16} />,
+            }}
+          >
+            <StepperNav>
+              {steps.map((step, index) => (
+                <StepperItem
+                  key={index}
+                  step={index + 1}
+                  className="relative items-start not-last:flex-1"
+                >
+                  <StepperTrigger className="items-start gap-2.5 pb-12 last:pb-0">
+                    <StepperIndicator className="data-[state=completed]:bg-success data-[state=completed]:text-white">
+                      {index + 1}
+                    </StepperIndicator>
+                    <div className="mt-0.5 -translate-y-1 text-left">
+                      <StepperTitle className="text-lg">
+                        {step.title}
+                      </StepperTitle>
+                      <StepperDescription className="text-base">
+                        {step.description}
+                      </StepperDescription>
+                      {index === 1 && (
+                        <div>
+                          <div className="flex items-center gap-5 py-3 text-mist-500">
+                            <div className="h-px w-full bg-mist-600"></div>
+                            <p>or</p>
+                            <div className="h-px w-full bg-mist-600"></div>
+                          </div>
+                          <div>
+                            <StepperTitle className="text-lg">
+                              Describe what you want to build
+                            </StepperTitle>
+                            <StepperDescription className="text-base">
+                              Click Generate Contract and describe your contract
+                              in plain English. Specify the token type, access
+                              controls, transfer rules, or any other logic. The
+                              AI generates production-ready Solidity from your
+                              description - no prior Solidity experience
+                              required to get started.
+                            </StepperDescription>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  </StepperTrigger>
+                  {index < steps.length - 1 && (
+                    <StepperSeparator className="group-data-[state=completed]/step:bg-success absolute inset-y-0 top-7 left-3 -order-1 m-0 -translate-x-1/2 group-data-[orientation=vertical]/stepper-nav:h-[calc(100%-2rem)]" />
+                  )}
+                </StepperItem>
+              ))}
+            </StepperNav>
+          </Stepper>
+        </section>
+      </Element>
+
+      <Element name="contribute">
+        <section className="px-20 py-24">
+          <div className="space-y-5 rounded-2xl border-2 bg-mist-900/50 p-6 py-10 text-center">
+            <h2 className="text-4xl font-bold uppercase">
+              Are you a security researcher? <br />{" "}
+              <span className="text-primary">Contribute</span> and{" "}
+              <span className="text-primary">earn</span>.
+            </h2>
+            <p className="text-lg font-medium text-mist-400">
+              Submit a structured vulnerability pattern - the code, the attack
+              scenario, and the fix. A senior auditor reviews and validates your
+              submission on-chain. Once approved, your label enters the training
+              set and your wallet address is permanently attributed to every
+              finding it generates. The more your pattern matches in live
+              audits, the more recognition your contribution carries on-chain.
+            </p>
+            <div className="mt-10 space-y-2">
+              <Button disabled={isConnecting} onClick={openDialog}>
+                Audit Your First Contract{" "}
+                <HugeiconsIcon icon={ArrowUpRight01Icon} strokeWidth={2} />
+              </Button>
+              <p className="text-sm text-mist-400">
+                No credit card. No setup. Connect your wallet and ready to go.
+              </p>
+            </div>
+          </div>
+        </section>
+      </Element>
 
       <footer className="border-t border-mist-800 px-20 py-16">
         <div className="grid grid-cols-4 gap-12">

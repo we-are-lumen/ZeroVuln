@@ -41,7 +41,7 @@ export default function RootLayout({
       )}
       suppressHydrationWarning
     >
-      <body className="flex min-h-full flex-col">
+      <body className="flex min-h-full flex-col scroll-smooth">
         <MainProvider>
           <Toaster theme="dark" position="top-right" />
           {children}
