@@ -53,6 +53,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/shared/components/ui/dialog";
+import { Typewriter } from "react-simple-typewriter";
 
 function getEthereum(): Eip1193Provider | undefined {
   if (typeof window === "undefined") return undefined;
@@ -77,12 +78,19 @@ const steps = [
   },
 ];
 
+const promptExamples = [
+  "Write a Solidity smart contract named YieldStakingVault using version ^0.8.20. The contract should allow users to stake an external ERC-20 token (passed in the constructor) and earn rewards in a separate ERC-20 token.",
+  "Write a custom Multi-Signature wallet contract in Solidity 0.8.x that requires M out of N owners to approve a transaction before execution.",
+  "Create a UUPS (UUPSUpgradeable) proxy-compatible contract named GovernanceTimelock using OpenZeppelin Upgradeable contracts.",
+  "Write a three-party Escrow smart contract in Solidity. The parties involved are a Buyer, a Seller, and a trusted Arbitrator.",
+];
+
 export default function Home() {
   const { data } = useQueryPublicStats();
 
   const router = useRouter();
   const [isConnecting, setIsConnecting] = useState(false);
-  const [isDialogOpen, setisDialogOpen] = useState(true);
+  const [isDialogOpen, setisDialogOpen] = useState(false);
 
   const openDialog = () => setisDialogOpen(true);
 
@@ -175,16 +183,15 @@ export default function Home() {
           output signed by an Agent ID and stored tamper-evidently in 0G
           Storage.
         </p>
-        <div className="relative mt-10 flex w-[60vw] flex-col space-y-6 rounded-xl border bg-mist-950/90 p-6 backdrop-blur-sm">
-          <Textarea
-            style={{
-              minHeight: "100px",
-              maxHeight: "210px",
-            }}
-            disabled
-            placeholder="Staking pool with daily rewards, max stake of 1000 tokens per address, 7-day withdrawal lock ..."
-            className="w-full resize-none overflow-y-auto border-none bg-transparent text-sm leading-relaxed ring-transparent! focus-visible:ring-0!"
-          />
+        <div className="relative mt-10 flex w-[60vw] flex-col space-y-6 rounded-2xl border bg-mist-950/90 p-6 backdrop-blur-sm">
+          <div className="h-28 text-start text-mist-400">
+            <Typewriter
+              words={promptExamples}
+              typeSpeed={10}
+              deleteSpeed={5}
+              loop={false}
+            />
+          </div>
 
           <div className="flex items-center justify-between border-mist-800">
             <input type="file" className="hidden" accept=".sol" />
