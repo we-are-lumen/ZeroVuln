@@ -135,7 +135,6 @@ export default function Home() {
 
       router.push("/dashboard");
     } catch (err: unknown) {
-      console.error(err);
       const message =
         err instanceof Error ? err.message : "Failed connecting to wallet.";
       toast.error(message);
